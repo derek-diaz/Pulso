@@ -77,6 +77,33 @@ func (m *Manager) AddTag(tag plc.WatchedTag) error {
 	return nil
 }
 
+func (m *Manager) ReplaceTags(tags []plc.WatchedTag) error {
+	nextTags := make(map[string]plc.WatchedTag, len(tags))
+	nextSnaps := make(map[string]plc.TagSnapshot, len(tags))
+	for _, tag := range tags {
+		normalized, err := NormalizeTag(tag)
+		if err != nil {
+			return err
+		}
+		if _, exists := nextTags[normalized.ID]; exists {
+			return fmt.Errorf("duplicate tag ID %s", normalized.ID)
+		}
+		nextTags[normalized.ID] = normalized
+		nextSnaps[normalized.ID] = plc.TagSnapshot{
+			TagID:    normalized.ID,
+			Name:     normalized.Name,
+			DataType: normalized.DataType,
+			Status:   "pending",
+		}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tags = nextTags
+	m.snaps = nextSnaps
+	return nil
+}
+
 func (m *Manager) UpdateTag(tag plc.WatchedTag) error {
 	normalized, err := NormalizeTag(tag)
 	if err != nil {

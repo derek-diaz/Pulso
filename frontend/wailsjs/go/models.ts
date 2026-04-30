@@ -1,3 +1,22 @@
+export namespace backend {
+	
+	export class WatchListImportResult {
+	    imported: number;
+	    errors?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new WatchListImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.imported = source["imported"];
+	        this.errors = source["errors"];
+	    }
+	}
+
+}
+
 export namespace plc {
 	
 	export class ConnectionConfig {

@@ -1,6 +1,7 @@
+import { useEffect, useRef, useState } from "react";
 import { TagSnapshot, WatchedTag } from "../types";
 import { StatusBadge } from "./StatusBadge";
-import { formatTimestamp, formatValue, wasRecent } from "../format";
+import { formatTimestamp, formatValue } from "../format";
 
 type Props = {
   tags: WatchedTag[];
@@ -9,10 +10,8 @@ type Props = {
   changedTagIds: Set<string>;
   connected: boolean;
   search: string;
-  changedOnly: boolean;
   pollingActive: boolean;
   onSearchChange: (value: string) => void;
-  onChangedOnlyChange: (value: boolean) => void;
   onTogglePolling: () => void;
   onClearHighlights: () => void;
   onConnect: () => void;
@@ -30,10 +29,8 @@ export function LiveWatchTable({
   changedTagIds,
   connected,
   search,
-  changedOnly,
   pollingActive,
   onSearchChange,
-  onChangedOnlyChange,
   onTogglePolling,
   onClearHighlights,
   onConnect,
@@ -44,11 +41,7 @@ export function LiveWatchTable({
   onRemove,
 }: Props) {
   const filteredTags = tags.filter((tag) => {
-    const snapshot = snapshotsByTagId[tag.id];
-    const matchesSearch = tag.name.toLowerCase().includes(search.toLowerCase());
-    const recentlyChanged =
-      changedTagIds.has(tag.id) || wasRecent(snapshot?.lastChangedAt, 10000);
-    return matchesSearch && (!changedOnly || recentlyChanged);
+    return tag.name.toLowerCase().includes(search.toLowerCase());
   });
 
   return (
@@ -65,14 +58,6 @@ export function LiveWatchTable({
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="Search watched tags"
         />
-        <label className="toggle-line">
-          <input
-            type="checkbox"
-            checked={changedOnly}
-            onChange={(event) => onChangedOnlyChange(event.target.checked)}
-          />
-          changed recently
-        </label>
         <button
           className={pollingActive ? "secondary" : "primary"}
           type="button"
@@ -127,6 +112,8 @@ export function LiveWatchTable({
                 const status = snapshot?.status ?? "pending";
                 const tone =
                   status === "ok" ? "ok" : status === "error" ? "error" : "pending";
+                const currentValue = formatValue(snapshot?.currentValue);
+                const previousValue = formatValue(snapshot?.previousValue);
                 return (
                   <tr
                     key={tag.id}
@@ -138,14 +125,23 @@ export function LiveWatchTable({
                     onClick={() => onSelect(tag.id)}
                   >
                     <td>
-                      <code>{tag.name}</code>
+                      <div className="copyable-content">
+                        <code>{tag.name}</code>
+                        <CopyButton label="Copy tag name" value={tag.name} />
+                      </div>
                     </td>
                     <td>{tag.dataType}</td>
                     <td className="value-cell">
-                      {formatValue(snapshot?.currentValue)}
+                      <div className="copyable-content">
+                        <span>{currentValue}</span>
+                        <CopyButton label="Copy current value" value={currentValue} />
+                      </div>
                     </td>
                     <td className="value-cell">
-                      {formatValue(snapshot?.previousValue)}
+                      <div className="copyable-content">
+                        <span>{previousValue}</span>
+                        <CopyButton label="Copy previous value" value={previousValue} />
+                      </div>
                     </td>
                     <td>{formatTimestamp(snapshot?.lastChangedAt)}</td>
                     <td>{formatTimestamp(snapshot?.lastReadAt)}</td>
@@ -183,4 +179,71 @@ export function LiveWatchTable({
       </div>
     </section>
   );
+}
+
+function CopyButton({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  const resetTimer = useRef<number>();
+
+  useEffect(() => {
+    return () => {
+      if (resetTimer.current !== undefined) {
+        window.clearTimeout(resetTimer.current);
+      }
+    };
+  }, []);
+
+  return (
+    <button
+      type="button"
+      className={`inline-copy ${copied ? "is-copied" : ""}`}
+      aria-label={copied ? "Copied" : label}
+      title={copied ? "Copied" : label}
+      onClick={async (event) => {
+        event.stopPropagation();
+        await copyText(value);
+        setCopied(true);
+        if (resetTimer.current !== undefined) {
+          window.clearTimeout(resetTimer.current);
+        }
+        resetTimer.current = window.setTimeout(() => setCopied(false), 1200);
+      }}
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </button>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" focusable="false">
+      <path d="M7 3.5h7.5v9H13v-7H7v-2Z" />
+      <path d="M4.5 6.5H12v10H4.5v-10Zm1.5 1.5v7h4.5V8H6Z" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" focusable="false">
+      <path d="M8.4 13.6 4.9 10l1.2-1.2 2.3 2.3 5.5-5.7 1.2 1.2-6.7 7Z" />
+    </svg>
+  );
+}
+
+async function copyText(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
 }

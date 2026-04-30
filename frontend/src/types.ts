@@ -70,6 +70,11 @@ export type TagSnapshot = {
   error?: string;
 };
 
+export type TrendPoint = {
+  timestamp: number;
+  value: number;
+};
+
 export type WriteRequest = {
   tagId: string;
   name: string;
@@ -87,6 +92,11 @@ export type WriteResult = {
   latencyMs: number;
   note: string;
   error?: string;
+};
+
+export type WatchListImportResult = {
+  imported: number;
+  errors?: string[];
 };
 
 export type AppEvent = {

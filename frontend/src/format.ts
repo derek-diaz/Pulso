@@ -47,11 +47,3 @@ export function formatTimestamp(value?: string): string {
     fractionalSecondDigits: 3,
   });
 }
-
-export function wasRecent(value: string | undefined, windowMs: number): boolean {
-  if (!value) {
-    return false;
-  }
-  const timestamp = new Date(value).getTime();
-  return !Number.isNaN(timestamp) && Date.now() - timestamp <= windowMs;
-}

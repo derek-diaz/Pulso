@@ -6,14 +6,17 @@ import {
   WriteRequest,
   WriteResult,
   DiscoveredTag,
+  WatchListImportResult,
 } from "../types";
 import {
   AddWatchedTag,
   Connect,
   DiscoverTags,
   Disconnect,
+  ExportWatchedTags,
   GetConnectionStatus,
   GetWatchedTags,
+  ImportWatchedTags,
   ReadTag,
   RemoveWatchedTag,
   SetPollInterval,
@@ -35,6 +38,10 @@ export const api = {
   removeWatchedTag: (tagId: string): Promise<void> => RemoveWatchedTag(tagId),
   getWatchedTags: (): Promise<WatchedTag[]> =>
     GetWatchedTags() as unknown as Promise<WatchedTag[]>,
+  importWatchedTags: (tags: WatchedTag[]): Promise<WatchListImportResult> =>
+    ImportWatchedTags(tags) as unknown as Promise<WatchListImportResult>,
+  exportWatchedTags: (format: string): Promise<string> =>
+    ExportWatchedTags(format) as unknown as Promise<string>,
   readTag: (tag: WatchedTag): Promise<TagSnapshot> =>
     ReadTag(tag) as unknown as Promise<TagSnapshot>,
   writeTag: (request: WriteRequest): Promise<WriteResult> =>

@@ -1,10 +1,15 @@
 package backend
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
+	"strings"
 	"time"
 
 	"Pulso/backend/events"
@@ -32,6 +37,18 @@ type WriteResult = plc.WriteResult
 type DiscoveredTag = plc.DiscoveredTag
 type DiscoveryProgress = plc.DiscoveryProgress
 type AppEvent = events.AppEvent
+
+type WatchListImportResult struct {
+	Imported int      `json:"imported"`
+	Errors   []string `json:"errors,omitempty"`
+}
+
+type watchListExport struct {
+	Format     string           `json:"format"`
+	Version    int              `json:"version"`
+	ExportedAt string           `json:"exportedAt"`
+	Tags       []plc.WatchedTag `json:"tags"`
+}
 
 func NewApp() *App {
 	client := plc.NewGoPLCClient()
@@ -167,6 +184,157 @@ func (a *App) RemoveWatchedTag(tagID string) error {
 
 func (a *App) GetWatchedTags() []plc.WatchedTag {
 	return a.manager.GetTags()
+}
+
+func (a *App) ImportWatchedTags(tags []plc.WatchedTag) (WatchListImportResult, error) {
+	normalizedTags := make([]plc.WatchedTag, 0, len(tags))
+	seenNames := make(map[string]struct{}, len(tags))
+	result := WatchListImportResult{}
+
+	for index, tag := range tags {
+		normalized, err := watch.NormalizeTag(tag)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("row %d: %s", index+1, err.Error()))
+			continue
+		}
+		if err := validateImportedWatchedTag(normalized); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %s", normalized.Name, err.Error()))
+			continue
+		}
+		if _, exists := seenNames[normalized.Name]; exists {
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: duplicate tag", normalized.Name))
+			continue
+		}
+		seenNames[normalized.Name] = struct{}{}
+		normalizedTags = append(normalizedTags, normalized)
+	}
+
+	if len(normalizedTags) == 0 && len(tags) > 0 {
+		err := fmt.Errorf("no valid tags found in import")
+		a.emitAppEvent("ERROR", "watch", err.Error(), result)
+		return result, err
+	}
+
+	if err := a.manager.ReplaceTags(normalizedTags); err != nil {
+		a.emitAppEvent("ERROR", "watch", err.Error(), result)
+		return result, err
+	}
+	result.Imported = len(normalizedTags)
+	a.emitAppEvent("INFO", "watch", fmt.Sprintf("Imported %d watched tags", result.Imported), result)
+	return result, nil
+}
+
+func (a *App) ExportWatchedTags(format string) (string, error) {
+	format = strings.ToLower(strings.TrimSpace(format))
+	if format != "json" && format != "csv" {
+		return "", fmt.Errorf("unsupported watch-list export format %q", format)
+	}
+
+	tags := a.manager.GetTags()
+	if len(tags) == 0 {
+		return "", fmt.Errorf("there are no watched tags to export")
+	}
+
+	contents, err := encodeWatchList(tags, format)
+	if err != nil {
+		a.emitAppEvent("ERROR", "watch", err.Error(), map[string]string{"format": format})
+		return "", err
+	}
+
+	filename := fmt.Sprintf("pulso-watch-list-%s.%s", time.Now().Format("2006-01-02-150405"), format)
+	filterName := "JSON watch list (*.json)"
+	pattern := "*.json"
+	if format == "csv" {
+		filterName = "CSV watch list (*.csv)"
+		pattern = "*.csv"
+	}
+
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Export Watch List",
+		DefaultFilename: filename,
+		Filters: []runtime.FileFilter{{
+			DisplayName: filterName,
+			Pattern:     pattern,
+		}},
+		CanCreateDirectories: true,
+	})
+	if err != nil {
+		a.emitAppEvent("ERROR", "watch", err.Error(), map[string]string{"format": format})
+		return "", err
+	}
+	if path == "" {
+		return "", nil
+	}
+	if !strings.HasSuffix(strings.ToLower(path), "."+format) {
+		path += "." + format
+	}
+	if err := os.WriteFile(path, contents, 0o644); err != nil {
+		a.emitAppEvent("ERROR", "watch", err.Error(), map[string]string{"path": path})
+		return "", err
+	}
+
+	a.emitAppEvent("INFO", "watch", fmt.Sprintf("Exported %d watched tags to %s", len(tags), path), map[string]string{"path": path, "format": format})
+	return path, nil
+}
+
+func encodeWatchList(tags []plc.WatchedTag, format string) ([]byte, error) {
+	switch format {
+	case "json":
+		payload := watchListExport{
+			Format:     "pulso.watchlist",
+			Version:    1,
+			ExportedAt: time.Now().Format(time.RFC3339Nano),
+			Tags:       tags,
+		}
+		data, err := json.MarshalIndent(payload, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		return append(data, '\n'), nil
+	case "csv":
+		var buffer bytes.Buffer
+		writer := csv.NewWriter(&buffer)
+		if err := writer.Write([]string{"name", "dataType", "elementCount", "elementSize", "id"}); err != nil {
+			return nil, err
+		}
+		for _, tag := range tags {
+			if err := writer.Write([]string{
+				tag.Name,
+				string(tag.DataType),
+				fmt.Sprintf("%d", tag.ElementCount),
+				optionalIntString(tag.ElementSize),
+				tag.ID,
+			}); err != nil {
+				return nil, err
+			}
+		}
+		writer.Flush()
+		return buffer.Bytes(), writer.Error()
+	default:
+		return nil, fmt.Errorf("unsupported watch-list export format %q", format)
+	}
+}
+
+func optionalIntString(value int) string {
+	if value == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d", value)
+}
+
+func validateImportedWatchedTag(tag plc.WatchedTag) error {
+	switch tag.DataType {
+	case plc.TagBool, plc.TagSint, plc.TagInt, plc.TagDint, plc.TagLint, plc.TagReal, plc.TagString, plc.TagStruct:
+	default:
+		return fmt.Errorf("unsupported data type %q", tag.DataType)
+	}
+	if tag.ElementCount <= 0 {
+		return fmt.Errorf("element count must be greater than zero")
+	}
+	if tag.ElementSize < 0 {
+		return fmt.Errorf("element size cannot be negative")
+	}
+	return nil
 }
 
 func (a *App) DiscoverTags() ([]plc.DiscoveredTag, error) {

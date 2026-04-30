@@ -18,12 +18,20 @@ export function DiscoverTags() {
   return window['go']['backend']['App']['DiscoverTags']();
 }
 
+export function ExportWatchedTags(arg1) {
+  return window['go']['backend']['App']['ExportWatchedTags'](arg1);
+}
+
 export function GetConnectionStatus() {
   return window['go']['backend']['App']['GetConnectionStatus']();
 }
 
 export function GetWatchedTags() {
   return window['go']['backend']['App']['GetWatchedTags']();
+}
+
+export function ImportWatchedTags(arg1) {
+  return window['go']['backend']['App']['ImportWatchedTags'](arg1);
 }
 
 export function ReadTag(arg1) {

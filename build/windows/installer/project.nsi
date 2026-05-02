@@ -88,6 +88,28 @@ Section
 
     !insertmacro wails.files
 
+    !ifdef SUPPORTS_AMD64
+        ${if} ${IsNativeAMD64}
+            !if /FileExists "resources\plctag\amd64\libplctag.dll"
+                File "/oname=libplctag.dll" "resources\plctag\amd64\libplctag.dll"
+            !endif
+            !if /FileExists "resources\plctag\amd64\plctag.dll"
+                File "/oname=plctag.dll" "resources\plctag\amd64\plctag.dll"
+            !endif
+        ${EndIf}
+    !endif
+
+    !ifdef SUPPORTS_ARM64
+        ${if} ${IsNativeARM64}
+            !if /FileExists "resources\plctag\arm64\libplctag.dll"
+                File "/oname=libplctag.dll" "resources\plctag\arm64\libplctag.dll"
+            !endif
+            !if /FileExists "resources\plctag\arm64\plctag.dll"
+                File "/oname=plctag.dll" "resources\plctag\arm64\plctag.dll"
+            !endif
+        ${EndIf}
+    !endif
+
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 

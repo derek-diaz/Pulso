@@ -6,7 +6,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LIBPLCTAG_PREFIX="${ROOT_DIR}/.deps/libplctag-install"
+LIBPLCTAG_PREFIX="${LIBPLCTAG_PREFIX:-${ROOT_DIR}/.deps/libplctag-install}"
 LIBPLCTAG_LIB_DIR="${LIBPLCTAG_PREFIX}/lib"
 LIBPLCTAG_PKG_CONFIG_DIR="${LIBPLCTAG_LIB_DIR}/pkgconfig"
 

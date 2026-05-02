@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { ConnectionPanel } from "./components/ConnectionPanel";
 import { DiscoverTagsModal } from "./components/DiscoverTagsModal";
@@ -56,7 +56,7 @@ function App() {
     pollingActive: false,
   });
   const [changedTagIds, setChangedTagIds] = useState<Set<string>>(new Set());
-  const [trendHistoryByTagId, setTrendHistoryByTagId] = useState<Record<string, TrendPoint[]>>({});
+  const [selectedTrendHistory, setSelectedTrendHistory] = useState<TrendPoint[]>([]);
   const [search, setSearch] = useState("");
   const [lastWrites, setLastWrites] = useState<Record<string, WriteResult>>({});
   const [addTagOpen, setAddTagOpen] = useState(false);
@@ -66,6 +66,11 @@ function App() {
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [watchListOpen, setWatchListOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+  const changeTimersRef = useRef<Record<string, number>>({});
+  const pendingSnapshotsRef = useRef<Record<string, TagSnapshot>>({});
+  const snapshotFrameRef = useRef<number>();
+  const selectedTagIdRef = useRef<string>();
+  const trendHistoryRef = useRef<Record<string, TrendPoint[]>>({});
 
   useEffect(() => {
     document.body.classList.toggle("theme-light", theme === "light");
@@ -85,7 +90,7 @@ function App() {
       setState((current) => ({ ...current, watchedTags }));
     });
 
-    return subscribeBackendEvents({
+    const unsubscribe = subscribeBackendEvents({
       onConnectionStatus: (connectionStatus) =>
         setState((current) => ({
           ...current,
@@ -93,17 +98,7 @@ function App() {
           pollingActive: connectionStatus.pollingActive,
         })),
       onTagSnapshot: (snapshot) => applySnapshot(snapshot),
-      onTagChanged: (snapshot) => {
-        applySnapshot(snapshot);
-        setChangedTagIds((current) => new Set(current).add(snapshot.tagId));
-        window.setTimeout(() => {
-          setChangedTagIds((current) => {
-            const next = new Set(current);
-            next.delete(snapshot.tagId);
-            return next;
-          });
-        }, 1800);
-      },
+      onTagChanged: (snapshot) => markTagChanged(snapshot.tagId),
       onTagError: (snapshot) => applySnapshot(snapshot),
       onWriteResult: (result) =>
         setLastWrites((current) => ({ ...current, [result.tagId]: result })),
@@ -120,17 +115,58 @@ function App() {
         setState((current) => ({ ...current, pollingActive })),
       onDiscoveryProgress: setDiscoveryProgress,
     });
+
+    return () => {
+      unsubscribe();
+      Object.values(changeTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+      changeTimersRef.current = {};
+      if (snapshotFrameRef.current !== undefined) {
+        window.cancelAnimationFrame(snapshotFrameRef.current);
+        snapshotFrameRef.current = undefined;
+      }
+    };
   }, []);
 
+  useEffect(() => {
+    selectedTagIdRef.current = state.selectedTagId;
+    setSelectedTrendHistory(
+      state.selectedTagId ? trendHistoryRef.current[state.selectedTagId] ?? [] : []
+    );
+  }, [state.selectedTagId]);
+
   function applySnapshot(snapshot: TagSnapshot) {
-    setState((current) => ({
-      ...current,
-      snapshotsByTagId: {
-        ...current.snapshotsByTagId,
-        [snapshot.tagId]: snapshot,
-      },
-    }));
+    pendingSnapshotsRef.current[snapshot.tagId] = snapshot;
+    if (snapshotFrameRef.current === undefined) {
+      snapshotFrameRef.current = window.requestAnimationFrame(() => {
+        snapshotFrameRef.current = undefined;
+        const pendingSnapshots = pendingSnapshotsRef.current;
+        pendingSnapshotsRef.current = {};
+        setState((current) => ({
+          ...current,
+          snapshotsByTagId: {
+            ...current.snapshotsByTagId,
+            ...pendingSnapshots,
+          },
+        }));
+      });
+    }
     applyTrendPoint(snapshot);
+  }
+
+  function markTagChanged(tagId: string) {
+    setChangedTagIds((current) => new Set(current).add(tagId));
+    const existingTimer = changeTimersRef.current[tagId];
+    if (existingTimer !== undefined) {
+      window.clearTimeout(existingTimer);
+    }
+    changeTimersRef.current[tagId] = window.setTimeout(() => {
+      delete changeTimersRef.current[tagId];
+      setChangedTagIds((current) => {
+        const next = new Set(current);
+        next.delete(tagId);
+        return next;
+      });
+    }, 1800);
   }
 
   function applyTrendPoint(snapshot: TagSnapshot) {
@@ -143,15 +179,16 @@ function App() {
     }
     const timestamp = Date.parse(snapshot.lastReadAt) || Date.now();
     const cutoff = timestamp - trendRetentionMs;
-    setTrendHistoryByTagId((current) => {
-      const existing = current[snapshot.tagId] ?? [];
-      const last = existing[existing.length - 1];
-      if (last?.timestamp === timestamp && last.value === value) {
-        return current;
-      }
-      const next = [...existing.filter((point) => point.timestamp >= cutoff), { timestamp, value }];
-      return { ...current, [snapshot.tagId]: next };
-    });
+    const existing = trendHistoryRef.current[snapshot.tagId] ?? [];
+    const last = existing[existing.length - 1];
+    if (last?.timestamp === timestamp && last.value === value) {
+      return;
+    }
+    const next = [...existing.filter((point) => point.timestamp >= cutoff), { timestamp, value }];
+    trendHistoryRef.current[snapshot.tagId] = next;
+    if (selectedTagIdRef.current === snapshot.tagId) {
+      setSelectedTrendHistory(next);
+    }
   }
 
   async function connect(config: ConnectionConfig) {
@@ -175,11 +212,10 @@ function App() {
   async function updateTag(tag: WatchedTag) {
     await api.updateWatchedTag(tag);
     const watchedTags = await api.getWatchedTags();
-    setTrendHistoryByTagId((history) => {
-      const next = { ...history };
-      delete next[tag.id];
-      return next;
-    });
+    delete trendHistoryRef.current[tag.id];
+    if (selectedTagIdRef.current === tag.id) {
+      setSelectedTrendHistory([]);
+    }
     setState((current) => {
       const snapshotsByTagId = { ...current.snapshotsByTagId };
       delete snapshotsByTagId[tag.id];
@@ -194,11 +230,10 @@ function App() {
 
   async function removeTag(tagId: string) {
     await api.removeWatchedTag(tagId);
-    setTrendHistoryByTagId((history) => {
-      const next = { ...history };
-      delete next[tagId];
-      return next;
-    });
+    delete trendHistoryRef.current[tagId];
+    if (selectedTagIdRef.current === tagId) {
+      setSelectedTrendHistory([]);
+    }
     setState((current) => {
       const snapshotsByTagId = { ...current.snapshotsByTagId };
       delete snapshotsByTagId[tagId];
@@ -232,7 +267,8 @@ function App() {
       selectedTagId: undefined,
     }));
     setChangedTagIds(new Set());
-    setTrendHistoryByTagId({});
+    trendHistoryRef.current = {};
+    setSelectedTrendHistory([]);
     return result;
   }
 
@@ -356,7 +392,7 @@ function App() {
           <TagInspector
             tag={selectedTag}
             snapshot={selectedSnapshot}
-            history={trendHistoryByTagId[selectedTag.id] ?? []}
+            history={selectedTrendHistory}
             lastWrite={lastWrites[selectedTag.id]}
             onWrite={writeSelected}
             onClose={() =>

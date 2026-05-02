@@ -1,4 +1,7 @@
 build/bin
+build/package
+build/windows/installer/resources
+build/windows/installer/tmp
 node_modules
 frontend/dist
 .deps

@@ -112,25 +112,46 @@ go test -tags libplctag . ./backend/...
 
 Build artifacts are written under `build/bin`.
 
-### Linux
+### Docker Builds
 
-Build without PLC support:
+The repeatable build path is containerized for the installers that can be produced from Linux:
 
 ```bash
-wails build -tags webkit2_41 -platform linux/amd64
+./scripts/docker-build-plc.sh linux-deb
+./scripts/docker-build-plc.sh windows-amd64
 ```
 
-Build with PLC support:
+Build both:
+
+```bash
+./scripts/docker-build-plc.sh all
+```
+
+The Linux container builds a PLC-enabled Debian package with `libplctag.so*` bundled under `/opt/Pulso/lib`.
+The Windows container cross-builds a PLC-enabled amd64 NSIS installer and bundles the matching `libplctag.dll` beside `Pulso.exe`.
+
+macOS builds still need to run on macOS because Wails does not support producing normal macOS app bundles from Linux. Use a macOS CI runner or Mac build machine for the `.app` bundle, library path adjustment, signing, and notarization.
+
+### Linux
+
+Build the PLC-enabled Linux executable:
 
 ```bash
 ./scripts/build-plc.sh
 ```
 
-The PLC build embeds an `$ORIGIN/lib` runtime search path and copies `libplctag.so*` into `build/bin/lib`. Distribute both:
+Build a PLC-enabled Debian package:
+
+```bash
+./scripts/package-linux-plc-deb.sh
+```
+
+The PLC executable embeds an `$ORIGIN/lib` runtime search path and copies `libplctag.so*` into `build/bin/lib`. The Debian package installs the same layout under `/opt/Pulso`, so users do not need to install `libplctag` system-wide.
 
 ```text
 build/bin/Pulso
 build/bin/lib/
+build/bin/pulso_0.1.0_amd64.deb
 ```
 
 Verify the bundled library is being used:
@@ -144,25 +165,28 @@ Expected result: `libplctag` resolves from `build/bin/lib`, and the binary has `
 
 ### Windows
 
-Build without PLC support from Windows:
+Build a PLC-enabled NSIS installer from Linux Docker:
 
-```powershell
-wails build -platform windows/amd64
+```bash
+./scripts/docker-build-plc.sh windows-amd64
 ```
 
-Build an NSIS installer:
+Build a PLC-enabled NSIS installer from Windows:
 
 ```powershell
-wails build -platform windows/amd64 -nsis
+.\scripts\build-windows-plc.ps1 -Arch amd64 -LibPlcTagRoot C:\path\to\libplctag
 ```
 
-For a PLC-enabled Windows build, install or unpack the Windows `libplctag` release, make `pkg-config` able to find `libplctag.pc`, and build with the `libplctag` tag:
+`LibPlcTagRoot` must contain both the build metadata and runtime DLL:
 
-```powershell
-wails build -platform windows/amd64 -tags libplctag
+```text
+C:\path\to\libplctag\lib\pkgconfig\libplctag.pc
+C:\path\to\libplctag\bin\libplctag.dll
 ```
 
-The installed app must include `plctag.dll` next to `Pulso.exe` or in a directory on the process `PATH`. The Windows installer script does not yet automate bundling `plctag.dll`.
+The script builds with the `libplctag` tag and copies the runtime DLL into the NSIS installer resources. The installer template places that DLL next to `Pulso.exe`, so users do not need to install PLC software or add anything to `PATH`.
+
+Run the script with `-Arch arm64` when building an ARM64 installer and provide an ARM64 `libplctag` root.
 
 ### macOS
 
@@ -185,7 +209,7 @@ For a PLC-enabled macOS build, build or install `libplctag` for the target archi
 wails build -platform darwin/universal -tags libplctag
 ```
 
-The `.app` bundle must include the `libplctag` dynamic library and have its library paths adjusted so the executable can load it from inside the app bundle. macOS PLC packaging is not automated yet.
+The `.app` bundle must include the `libplctag` dynamic library and have its library paths adjusted so the executable can load it from inside the app bundle. macOS PLC packaging still needs a target-mac build step to bundle and codesign that library.
 
 ### Cross-Platform Notes
 

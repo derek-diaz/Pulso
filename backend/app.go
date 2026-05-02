@@ -486,7 +486,6 @@ func (a *App) emitSnapshot(result watch.SnapshotResult, err error) {
 	a.emit("tag:snapshot", result.Snapshot)
 	if result.Changed {
 		a.emit("tag:changed", result.Snapshot)
-		a.emitAppEvent("DEBUG", "read", fmt.Sprintf("%s changed from %v to %v", result.Snapshot.Name, result.Snapshot.PreviousValue, result.Snapshot.CurrentValue), result.Snapshot)
 	}
 }
 

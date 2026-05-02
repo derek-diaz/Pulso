@@ -1,0 +1,8 @@
+.git
+.codex
+.deps
+.idea
+build/bin
+build/package
+frontend/dist
+frontend/node_modules

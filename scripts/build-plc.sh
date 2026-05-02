@@ -27,6 +27,7 @@ case "$(uname -s)" in
     fi
 
     mkdir -p "${bundled_lib_dir}"
+    rm -f "${bundled_lib_dir}"/libplctag.so*
     cp -a "${LIBPLCTAG_LIB_DIR}"/libplctag.so* "${bundled_lib_dir}/"
     echo "Bundled libplctag in ${bundled_lib_dir}"
     ;;

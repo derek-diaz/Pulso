@@ -32,7 +32,49 @@ Pulso is **not** SCADA, an HMI, or an operator dashboard. It is intended for loc
 
 ## Development
 
-### Prerequisites
+### One-Time Local Setup
+
+Run the setup script for your OS once. It installs or verifies the local development toolchain, installs the Wails CLI, installs frontend dependencies, and stages `libplctag` for PLC-enabled development under `.deps`.
+
+Windows:
+
+```powershell
+.\scripts\setup-dev-windows.ps1
+```
+
+Linux:
+
+```bash
+bash scripts/setup-dev-linux.sh
+```
+
+macOS:
+
+```bash
+bash scripts/setup-dev-macos.sh
+```
+
+After setup, run the PLC-enabled development app with:
+
+Windows:
+
+```powershell
+.\scripts\dev-plc.ps1
+```
+
+Linux/macOS:
+
+```bash
+bash scripts/dev-plc.sh
+```
+
+The setup scripts install Wails into the project-local `.deps/go-bin` directory. The development runners add that directory to `PATH` automatically.
+
+The Windows setup uses `winget` for Go, Node.js, and MSYS2, then uses MSYS2 packages for the C toolchain, CMake, Ninja, and `pkg-config`. It also adds the expected tool directories to the user `PATH`; open a new terminal after the first setup if your current shell does not pick up those changes.
+
+The Linux setup supports `apt`, `dnf`, and `pacman`. The macOS setup uses Homebrew and requires Xcode Command Line Tools.
+
+### Manual Prerequisites
 
 - Go 1.23+
 - Node.js and npm
@@ -60,16 +102,34 @@ wails dev -tags webkit2_41
 
 Real PLC communication uses the official Go wrapper, `github.com/libplctag/goplctag`, which is a cgo wrapper around the native `libplctag` C library.
 
+On Windows, `scripts/setup-dev-windows.ps1` installs/builds the expected local `libplctag` distribution automatically. If you want to provide your own, point Pulso at its root:
+
+```text
+C:\path\to\libplctag\lib\pkgconfig\libplctag.pc
+C:\path\to\libplctag\bin\libplctag.dll
+```
+
+Then run the PLC-enabled desktop app:
+
+```powershell
+$env:LIBPLCTAG_ROOT = "C:\path\to\libplctag"
+.\scripts\dev-plc.ps1
+```
+
+If you stage the dependency under `.deps\libplctag-windows-amd64`, the script can be run without `LIBPLCTAG_ROOT`.
+
+The script sets `CGO_ENABLED`, `PKG_CONFIG_PATH`, and `PATH` for the current Wails dev process, then runs `wails dev -tags libplctag`.
+
 The PLC helper scripts automatically download, build, and install `libplctag` into `.deps/libplctag-install` the first time they need it:
 
 ```bash
-./scripts/dev-plc.sh
+bash scripts/dev-plc.sh
 ```
 
 You can also prepare it explicitly:
 
 ```bash
-./scripts/setup-libplctag.sh
+bash scripts/setup-libplctag.sh
 ```
 
 The setup script installs the pinned `libplctag` release under the project-local `.deps` directory and expects this file after installation:
@@ -81,7 +141,7 @@ The setup script installs the pinned `libplctag` release under the project-local
 Override the default pinned version when needed:
 
 ```bash
-LIBPLCTAG_VERSION=2.6.16 ./scripts/setup-libplctag.sh
+LIBPLCTAG_VERSION=2.6.16 bash scripts/setup-libplctag.sh
 ```
 
 The helper scripts set `PKG_CONFIG_PATH`, `LD_LIBRARY_PATH`, and a project-local Go build cache. Set `PULSO_LIBPLCTAG_AUTO_SETUP=0` to require a pre-existing local libplctag install instead of bootstrapping it.

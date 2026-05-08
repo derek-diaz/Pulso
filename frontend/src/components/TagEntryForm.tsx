@@ -16,11 +16,12 @@ const dataTypes: TagDataType[] = [
 type Props = {
   onAdd: (tag: WatchedTag) => Promise<void>;
   onAdded?: () => void;
+  onCancel?: () => void;
   initialTag?: WatchedTag;
   submitLabel?: string;
 };
 
-export function TagEntryForm({ onAdd, onAdded, initialTag, submitLabel }: Props) {
+export function TagEntryForm({ onAdd, onAdded, onCancel, initialTag, submitLabel }: Props) {
   const [name, setName] = useState(initialTag?.name ?? "");
   const [dataType, setDataType] = useState<TagDataType>(initialTag?.dataType ?? "DINT");
   const [elementCount, setElementCount] = useState(initialTag?.elementCount ?? 1);
@@ -69,21 +70,20 @@ export function TagEntryForm({ onAdd, onAdded, initialTag, submitLabel }: Props)
         onChange={setName}
         placeholder="Motor.Speed"
       />
-      <label>
-        Type
-        <div className="select-control">
-          <select
-            value={dataType}
-            onChange={(event) => setDataType(event.target.value as TagDataType)}
+      <fieldset className="data-type-grid">
+        <legend>Data type</legend>
+        {dataTypes.map((type) => (
+          <button
+            key={type}
+            type="button"
+            className={dataType === type ? "is-active" : ""}
+            aria-pressed={dataType === type}
+            onClick={() => setDataType(type)}
           >
-            {dataTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </div>
-      </label>
+            {type}
+          </button>
+        ))}
+      </fieldset>
       <label className="advanced-toggle">
         <input
           type="checkbox"
@@ -114,9 +114,16 @@ export function TagEntryForm({ onAdd, onAdded, initialTag, submitLabel }: Props)
         </div>
       ) : null}
       {error ? <div className="inline-error">{error}</div> : null}
-      <button className="primary" type="submit" disabled={busy}>
-        {busy ? "Validating" : submitLabel ?? "Add to Watch"}
-      </button>
+      <div className="modal-action-row">
+        {onCancel ? (
+          <button className="secondary" type="button" onClick={onCancel} disabled={busy}>
+            Cancel
+          </button>
+        ) : null}
+        <button className="primary" type="submit" disabled={busy}>
+          {busy ? "Validating" : submitLabel ?? "Add to Watch"}
+        </button>
+      </div>
     </form>
   );
 }

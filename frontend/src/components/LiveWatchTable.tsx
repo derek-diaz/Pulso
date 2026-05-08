@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { TagSnapshot, WatchedTag } from "../types";
-import { StatusBadge } from "./StatusBadge";
 import { formatTimestamp, formatValue } from "../format";
 
 type Props = {
@@ -47,39 +46,54 @@ export function LiveWatchTable({
   return (
     <section className="center-panel">
       <div className="table-toolbar">
-        <button className="primary" type="button" disabled={!connected} onClick={onAddTag}>
-          Add Tag
-        </button>
-        <button className="secondary" type="button" disabled={!connected} onClick={onDiscoverTags}>
-          Discover
-        </button>
-        <input
-          value={search}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Search watched tags"
-        />
-        <button
-          className={pollingActive ? "secondary" : "primary"}
-          type="button"
-          onClick={onTogglePolling}
-        >
-          {pollingActive ? "Pause polling" : "Resume polling"}
-        </button>
-        <button className="secondary" type="button" onClick={onClearHighlights}>
-          Clear highlights
-        </button>
+        <div className="toolbar-left">
+          <button className="primary add-tag-button" type="button" disabled={!connected} onClick={onAddTag}>
+            <span aria-hidden="true">+</span>
+            Add Tag
+          </button>
+          <button className="secondary" type="button" disabled={!connected} onClick={onDiscoverTags}>
+            Discover
+          </button>
+          <div className="view-tabs" aria-label="Watch view mode">
+            <button className="is-active" type="button">
+              Live View
+            </button>
+            <button type="button" disabled>
+              Historical
+            </button>
+          </div>
+        </div>
+        <div className="toolbar-right">
+          <label className="search-field">
+            <input
+              value={search}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Search tags..."
+            />
+          </label>
+          <button
+            className={pollingActive ? "secondary" : "primary"}
+            type="button"
+            onClick={onTogglePolling}
+          >
+            {pollingActive ? "Pause" : "Resume"}
+          </button>
+          <button className="secondary" type="button" onClick={onClearHighlights}>
+            Clear
+          </button>
+        </div>
       </div>
       <div className="table-shell">
         <table>
           <thead>
             <tr>
-              <th>Tag</th>
+              <th aria-label="Read status" />
+              <th>Tag Path</th>
               <th>Type</th>
-              <th>Current Value</th>
-              <th>Previous Value</th>
+              <th>Value</th>
+              <th>Previous</th>
               <th>Last Changed</th>
               <th>Last Read</th>
-              <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -124,6 +138,13 @@ export function LiveWatchTable({
                     ].join(" ")}
                     onClick={() => onSelect(tag.id)}
                   >
+                    <td className="state-cell">
+                      <span
+                        className={`row-status-dot status-${tone}`}
+                        title={status}
+                        aria-label={status}
+                      />
+                    </td>
                     <td>
                       <div className="copyable-content">
                         <code>{tag.name}</code>
@@ -145,9 +166,6 @@ export function LiveWatchTable({
                     </td>
                     <td>{formatTimestamp(snapshot?.lastChangedAt)}</td>
                     <td>{formatTimestamp(snapshot?.lastReadAt)}</td>
-                    <td>
-                      <StatusBadge label={status} tone={tone} />
-                    </td>
                     <td className="actions-cell">
                       <button
                         type="button"

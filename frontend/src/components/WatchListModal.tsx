@@ -43,21 +43,20 @@ export function WatchListModal({ currentCount, onClose, onImport, onExport }: Pr
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="modal-header">
-          <div className="section-title compact" id="watch-list-title">
-            Watch Lists
+          <div>
+            <div className="modal-title" id="watch-list-title">
+              Watch Lists
+            </div>
+            <p className="modal-subtitle">{currentCount} tags in the current watch list</p>
           </div>
-          <button className="secondary" type="button" onClick={onClose}>
-            Close
+          <button className="modal-close-button" type="button" onClick={onClose} aria-label="Close">
+            X
           </button>
         </div>
 
         <div className="watch-list-grid">
           <section className="watch-list-section">
             <h2>Import</h2>
-            <p>
-              Importing replaces the current watch list with tags from a JSON or CSV file. Existing
-              read values are cleared and imported tags start in a pending state.
-            </p>
             <div
               className={`drop-zone ${dragActive ? "is-active" : ""}`}
               onDragEnter={(event) => {
@@ -81,8 +80,11 @@ export function WatchListModal({ currentCount, onClose, onImport, onExport }: Pr
                 }
               }}
             >
+              <div className="drop-zone-mark" aria-hidden="true">
+                WL
+              </div>
               <strong>Drop a watch-list file here</strong>
-              <span>Supports .json and .csv files.</span>
+              <span>JSON or CSV. Import replaces the current list.</span>
               <button
                 className="secondary"
                 type="button"
@@ -106,17 +108,18 @@ export function WatchListModal({ currentCount, onClose, onImport, onExport }: Pr
               />
             </div>
             <p className="watch-list-note">
-              CSV columns: <code>name,dataType,elementCount,elementSize,id</code>. Only
-              <code> name</code> and <code> dataType</code> are required.
+              Required CSV columns: <code>name</code> and <code>dataType</code>.
             </p>
           </section>
 
           <section className="watch-list-section">
             <h2>Export</h2>
-            <p>
-              Export the current {currentCount} watched tags so another teammate can import the
-              same known-good set.
-            </p>
+            <p>Export this known-good set for review, backup, or sharing with another workstation.</p>
+            <div className="watch-list-count-card">
+              <span>Current list</span>
+              <strong>{currentCount}</strong>
+              <em>watched tags</em>
+            </div>
             <div className="watch-list-export-actions">
               <button
                 className="primary"
@@ -133,7 +136,7 @@ export function WatchListModal({ currentCount, onClose, onImport, onExport }: Pr
                     .finally(() => setBusy(false));
                 }}
               >
-                Export JSON
+                JSON
               </button>
               <button
                 className="secondary"
@@ -150,11 +153,11 @@ export function WatchListModal({ currentCount, onClose, onImport, onExport }: Pr
                     .finally(() => setBusy(false));
                 }}
               >
-                Export CSV
+                CSV
               </button>
             </div>
             <p className="watch-list-note">
-              JSON preserves Pulso metadata. CSV is easier to review and edit in spreadsheets.
+              JSON preserves app metadata. CSV is easier to edit in a spreadsheet.
             </p>
           </section>
         </div>

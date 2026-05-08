@@ -70,14 +70,18 @@ export function EventConsole({ events, onClear }: Props) {
         </div>
       </div>
       <div className="console-log" ref={scrollRef}>
-        {filtered.map((event) => (
-          <div key={event.id} className={`console-line level-${event.level}`}>
-            <span>{formatTimestamp(event.timestamp)}</span>
-            <strong>[{event.level}]</strong>
-            <em>{event.type}</em>
-            <code>{event.message}</code>
-          </div>
-        ))}
+        {filtered.length === 0 ? (
+          <div className="console-empty">[system_idle] no events recorded</div>
+        ) : (
+          filtered.map((event) => (
+            <div key={event.id} className={`console-line level-${event.level}`}>
+              <span>{formatTimestamp(event.timestamp)}</span>
+              <strong>[{event.level}]</strong>
+              <em>{event.type}</em>
+              <code>{event.message}</code>
+            </div>
+          ))
+        )}
       </div>
     </section>
   );

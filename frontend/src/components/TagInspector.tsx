@@ -26,9 +26,10 @@ export function TagInspector({ tag, snapshot, history, lastWrite, onWrite, onClo
 
   return (
     <aside className="right-panel">
-      <section className="panel-card inspector-card">
-        <div className="section-title">
-          <span>Inspector</span>
+      <section className="panel-card inspector-card inspector-header-card">
+        <div className="inspector-heading">
+          <span className="inspector-icon" aria-hidden="true">i</span>
+          <span>Hardware_Inspector</span>
           <div className="inspector-title-actions">
             <StatusBadge label={status} tone={tone} />
             <button className="icon-button" type="button" onClick={onClose} aria-label="Close inspector">
@@ -38,9 +39,9 @@ export function TagInspector({ tag, snapshot, history, lastWrite, onWrite, onClo
         </div>
         <div className="inspector-tabs" role="tablist" aria-label="Inspector sections">
           {[
-            { id: "overview", label: "Overview" },
+            { id: "overview", label: "Info" },
             { id: "trend", label: "Trend" },
-            { id: "write", label: "Write" },
+            { id: "write", label: "Force" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -65,23 +66,39 @@ export function TagInspector({ tag, snapshot, history, lastWrite, onWrite, onClo
 }
 
 function OverviewPanel({ tag, snapshot }: { tag: WatchedTag; snapshot?: TagSnapshot }) {
+  const status = snapshot?.status ?? "pending";
+  const tone =
+    status === "ok" ? "ok" : status === "error" ? "error" : "pending";
+
   return (
     <section className="panel-card inspector-card">
+      <div className="inspector-section-label">Memory Mapping</div>
+      <div className="mapping-card">
+        <code>{tag.name}</code>
+      </div>
+      <dl className="inspector-meta-grid">
+        <div>
+          <dt>Type</dt>
+          <dd>{tag.dataType}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>
+            <StatusBadge label={status} tone={tone} />
+          </dd>
+        </div>
+      </dl>
+      <div className="active-value-card">
+        <span>Active Value</span>
+        <strong>{formatValue(snapshot?.currentValue)}</strong>
+      </div>
       <dl className="inspector-grid">
-        <dt>Tag</dt>
-        <dd>
-          <code>{tag.name}</code>
-        </dd>
-        <dt>Type</dt>
-        <dd>{tag.dataType}</dd>
-        <dt>Current</dt>
-        <dd className="value-cell">{formatValue(snapshot?.currentValue)}</dd>
         <dt>Previous</dt>
         <dd className="value-cell">{formatValue(snapshot?.previousValue)}</dd>
-        <dt>Last read</dt>
-        <dd>{formatTimestamp(snapshot?.lastReadAt)}</dd>
-        <dt>Last changed</dt>
+        <dt>Last transition</dt>
         <dd>{formatTimestamp(snapshot?.lastChangedAt)}</dd>
+        <dt>Cycle read</dt>
+        <dd>{formatTimestamp(snapshot?.lastReadAt)}</dd>
         <dt>Latency</dt>
         <dd>
           {snapshot?.readLatencyMs !== undefined

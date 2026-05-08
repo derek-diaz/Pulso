@@ -320,7 +320,6 @@ function App() {
     <main className="app-shell">
       <header className="app-header">
         <div className="brand-block">
-          <div className="eyebrow">PLC state debugger</div>
           <div className="brand-row">
             <svg
               className="brand-mark"
@@ -341,8 +340,22 @@ function App() {
           </div>
         </div>
         <div className="header-actions">
-          <button className="header-tool" type="button" onClick={() => setWatchListOpen(true)}>
-            Watch Lists
+          <button
+            className={`connection-chip ${
+              state.connectionStatus.connected ? "is-connected" : "is-disconnected"
+            }`}
+            type="button"
+            onClick={() => setConnectionOpen(true)}
+          >
+            <span />
+            <strong>{state.connectionStatus.connected ? "Connected" : "Connect"}</strong>
+            <em>
+              {state.connectionStatus.connected
+                ? state.connectionStatus.config?.address ?? "controller"
+                : state.pollingActive
+                ? "live"
+                : "idle"}
+            </em>
           </button>
           <button
             className="theme-toggle"
@@ -354,16 +367,8 @@ function App() {
           >
             {theme === "light" ? <MoonIcon /> : <SunIcon />}
           </button>
-          <button
-            className={`connection-chip ${
-              state.connectionStatus.connected ? "is-connected" : "is-disconnected"
-            }`}
-            type="button"
-            onClick={() => setConnectionOpen(true)}
-          >
-            <span />
-            <strong>{state.connectionStatus.connected ? "Connected" : "Connect"}</strong>
-            <em>{state.pollingActive ? "Live" : "Idle"}</em>
+          <button className="header-tool" type="button" onClick={() => setWatchListOpen(true)}>
+            Watch Lists
           </button>
         </div>
       </header>
@@ -415,14 +420,18 @@ function App() {
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="modal-header">
-              <div className="section-title compact" id="add-tag-title">
-                Add Tag
+              <div className="modal-title" id="add-tag-title">
+                Configure Tag
               </div>
-              <button className="secondary" type="button" onClick={() => setAddTagOpen(false)}>
-                Close
+              <button className="modal-close-button" type="button" onClick={() => setAddTagOpen(false)} aria-label="Close">
+                X
               </button>
             </div>
-            <TagEntryForm onAdd={addTag} onAdded={() => setAddTagOpen(false)} />
+            <TagEntryForm
+              onAdd={addTag}
+              onAdded={() => setAddTagOpen(false)}
+              onCancel={() => setAddTagOpen(false)}
+            />
           </section>
         </div>
       ) : null}
@@ -436,17 +445,18 @@ function App() {
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="modal-header">
-              <div className="section-title compact" id="edit-tag-title">
-                Edit Tag
+              <div className="modal-title" id="edit-tag-title">
+                Configure Tag
               </div>
-              <button className="secondary" type="button" onClick={() => setEditingTag(undefined)}>
-                Close
+              <button className="modal-close-button" type="button" onClick={() => setEditingTag(undefined)} aria-label="Close">
+                X
               </button>
             </div>
             <TagEntryForm
               initialTag={editingTag}
               onAdd={updateTag}
               onAdded={() => setEditingTag(undefined)}
+              onCancel={() => setEditingTag(undefined)}
               submitLabel="Update Watch"
             />
           </section>
@@ -462,11 +472,11 @@ function App() {
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="modal-header">
-              <div className="section-title compact" id="connection-title">
-                Connection
+              <div className="modal-title" id="connection-title">
+                PLC Connection
               </div>
-              <button className="secondary" type="button" onClick={() => setConnectionOpen(false)}>
-                Close
+              <button className="modal-close-button" type="button" onClick={() => setConnectionOpen(false)} aria-label="Close">
+                X
               </button>
             </div>
             <ConnectionPanel

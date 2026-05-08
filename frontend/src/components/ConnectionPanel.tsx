@@ -59,11 +59,12 @@ export function ConnectionPanel({ status, onConnect, onDisconnect, embedded = fa
             <span>Connection</span>
             <StatusBadge label={status.state} tone={tone} />
           </div>
-        ) : (
+        ) : null}
+        {embedded ? (
           <div className="status-line">
             <StatusBadge label={status.state} tone={tone} />
           </div>
-        )}
+        ) : null}
         <dl className="connection-grid">
           <dt>Target</dt>
           <dd>{status.config?.address ?? config.address}</dd>
@@ -72,7 +73,7 @@ export function ConnectionPanel({ status, onConnect, onDisconnect, embedded = fa
           <dt>Poll</dt>
           <dd>{status.config?.pollIntervalMs ?? config.pollIntervalMs} ms</dd>
         </dl>
-        <div className="button-row">
+        <div className={embedded ? "modal-action-row" : "button-row"}>
           <button type="button" className="secondary" onClick={() => setEditing(true)}>
             Reconfigure
           </button>
@@ -85,17 +86,13 @@ export function ConnectionPanel({ status, onConnect, onDisconnect, embedded = fa
   }
 
   return (
-    <section className={embedded ? "" : "panel-card"}>
+    <section className={embedded ? "connection-form" : "panel-card"}>
       {!embedded ? (
         <div className="section-title">
           <span>Connection</span>
           <StatusBadge label={status.state} tone={tone} />
         </div>
-      ) : (
-        <div className="status-line">
-          <StatusBadge label={status.state} tone={tone} />
-        </div>
-      )}
+      ) : null}
       <form onSubmit={submit} className="stack">
         <HistoryInput
           label="PLC IP Address"
@@ -144,7 +141,7 @@ export function ConnectionPanel({ status, onConnect, onDisconnect, embedded = fa
         {status.error || submitError ? (
           <div className="inline-error">{status.error || submitError}</div>
         ) : null}
-        <div className="button-row">
+        <div className={embedded ? "modal-action-row" : "button-row"}>
           <button className="primary" type="submit" disabled={busy || status.connected}>
             {busy ? "Connecting" : "Connect"}
           </button>

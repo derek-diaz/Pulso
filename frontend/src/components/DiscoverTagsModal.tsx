@@ -107,11 +107,11 @@ export function DiscoverTagsModal({ onClose, onDiscover, progress, onAdd }: Prop
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="modal-header">
-          <div className="section-title compact" id="discover-tags-title">
+          <div className="modal-title" id="discover-tags-title">
             Discover Tags
           </div>
-          <button className="secondary" type="button" onClick={onClose}>
-            Close
+          <button className="modal-close-button" type="button" onClick={onClose} aria-label="Close">
+            X
           </button>
         </div>
         <div className="discovery-toolbar">

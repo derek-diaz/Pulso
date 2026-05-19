@@ -1,0 +1,32 @@
+{
+  "name": "Pulso Sample Logix PLC",
+  "path": "1,0",
+  "tags": [
+    { "name": "LineRunning", "type": "BOOL", "value": true },
+    { "name": "LineSpeed", "type": "REAL", "value": 42.5, "behavior": { "kind": "sine", "amplitude": 3.5, "periodMs": 8000 } },
+    { "name": "PartCount", "type": "DINT", "value": 1200, "behavior": { "kind": "counter", "step": 1, "periodMs": 1000 } },
+    { "name": "BatchName", "type": "STRING", "value": "OFFLINE_TEST" },
+    { "name": "Temperatures", "type": "REAL", "dimensions": [4], "value": [72.1, 73.2, 71.8, 74.0] }
+  ],
+  "udts": [
+    {
+      "name": "MotorStatus",
+      "instance": "Motor_101",
+      "fields": [
+        { "name": "Running", "type": "BOOL", "value": true },
+        { "name": "Speed", "type": "REAL", "value": 1750.25, "behavior": { "kind": "sine", "amplitude": 25, "periodMs": 5000 } },
+        { "name": "FaultCode", "type": "DINT", "value": 0 },
+        { "name": "Mode", "type": "STRING", "value": "AUTO" }
+      ]
+    },
+    {
+      "name": "ValveStatus",
+      "instance": "Valve_201",
+      "fields": [
+        { "name": "Open", "type": "BOOL", "value": false },
+        { "name": "Command", "type": "BOOL", "value": false },
+        { "name": "Position", "type": "REAL", "value": 0 }
+      ]
+    }
+  ]
+}

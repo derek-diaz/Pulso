@@ -479,11 +479,15 @@ func readPLCString(handle int32, offset, payloadSize int) (string, int, error) {
 		return "", offset + totalNameLen, nil
 	}
 
-	buffer := make([]byte, nameLen+1)
-	if rc := goplctag.GetString(handle, int32(offset), buffer, int32(len(buffer))); rc != goplctag.StatusOk {
-		return "", offset, fmt.Errorf("could not read string: %s", goplctag.DecodeError(rc))
+	bytes := make([]byte, 0, nameLen)
+	for i := 0; i < nameLen && offset+i < payloadSize; i++ {
+		b := goplctag.GetUint8(handle, int32(offset+i))
+		if b == 0 {
+			break
+		}
+		bytes = append(bytes, b)
 	}
-	return strings.TrimRight(string(buffer), "\x00"), offset + totalNameLen, nil
+	return string(bytes), offset + totalNameLen, nil
 }
 
 func expandUDTFields(parentPath, parentScope string, definition *udtDefinition, definitions map[uint16]*udtDefinition, baseAttrs string, timeoutMs int32, seen []uint16) []DiscoveredTag {

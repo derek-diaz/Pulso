@@ -74,6 +74,37 @@ The Windows setup uses `winget` for Go, Node.js, and MSYS2, then uses MSYS2 pack
 
 The Linux setup supports `apt`, `dnf`, and `pacman`. The macOS setup uses Homebrew and requires Xcode Command Line Tools.
 
+### Offline PLC Emulator
+
+Pulso includes an external ControlLogix-style emulator for working away from real PLC hardware. It runs as a separate TCP service and Pulso connects through the existing `libplctag` path, so reads, writes, tag discovery, and UDT member discovery exercise the same app code used against a PLC.
+
+Start the sample emulator:
+
+```powershell
+.\scripts\run-plc-emulator.ps1
+```
+
+```bash
+bash scripts/run-plc-emulator.sh
+```
+
+Then connect Pulso with:
+
+```text
+Address: 127.0.0.1
+Path:    1,0
+```
+
+The default profile is `emulator/profiles/sample-logix.json`. Create another JSON profile with `tags` and `udts`, then pass it to the runner:
+
+```powershell
+.\scripts\run-plc-emulator.ps1 -Profile .\emulator\profiles\my-line.json
+```
+
+```bash
+bash scripts/run-plc-emulator.sh 127.0.0.1:44818 emulator/profiles/my-line.json
+```
+
 ### Manual Prerequisites
 
 - Go 1.23+

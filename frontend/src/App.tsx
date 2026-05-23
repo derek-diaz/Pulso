@@ -9,6 +9,16 @@ import { TagInspector } from "./components/TagInspector";
 import { WatchListModal } from "./components/WatchListModal";
 import { api } from "./services/api";
 import { subscribeBackendEvents } from "./services/events";
+import {
+  activityLevel,
+  appendTagHistory,
+  formatDelta,
+  InvestigationScope,
+  runtimeStatus,
+  samplesForWindow,
+  TagHistory,
+  TrendWindow,
+} from "./tagHistory";
 import { parseWatchListFile, WatchListFormat } from "./watchListFiles";
 import {
   AppEvent,
@@ -16,7 +26,6 @@ import {
   ConnectionConfig,
   DiscoveryProgress,
   TagSnapshot,
-  TrendPoint,
   WatchedTag,
   WriteResult,
   WatchListImportResult,
@@ -33,7 +42,15 @@ const initialEvent: AppEvent = {
 type ThemeMode = "dark" | "light";
 
 const themeStorageKey = "pulso-theme";
-const trendRetentionMs = 5 * 60 * 1000;
+const historySampleLimit = 60;
+
+type InvestigationEvent = {
+  id: string;
+  tagId?: string;
+  tone: "neutral" | "ok" | "warn" | "error";
+  message: string;
+  timestamp: string;
+};
 
 function getInitialTheme(): ThemeMode {
   const savedTheme = window.localStorage.getItem(themeStorageKey);
@@ -56,8 +73,12 @@ function App() {
     pollingActive: false,
   });
   const [changedTagIds, setChangedTagIds] = useState<Set<string>>(new Set());
-  const [selectedTrendHistory, setSelectedTrendHistory] = useState<TrendPoint[]>([]);
+  const [tagHistory, setTagHistory] = useState<TagHistory>({});
+  const [nowMs, setNowMs] = useState(Date.now());
   const [search, setSearch] = useState("");
+  const [scope, setScope] = useState<InvestigationScope>("all");
+  const [pinnedTagIds, setPinnedTagIds] = useState<Set<string>>(new Set());
+  const [investigationEvents, setInvestigationEvents] = useState<InvestigationEvent[]>([]);
   const [lastWrites, setLastWrites] = useState<Record<string, WriteResult>>({});
   const [addTagOpen, setAddTagOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<WatchedTag>();
@@ -66,17 +87,21 @@ function App() {
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [watchListOpen, setWatchListOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+  const [consoleCollapsed, setConsoleCollapsed] = useState(false);
   const changeTimersRef = useRef<Record<string, number>>({});
   const pendingSnapshotsRef = useRef<Record<string, TagSnapshot>>({});
   const snapshotFrameRef = useRef<number>();
-  const selectedTagIdRef = useRef<string>();
-  const trendHistoryRef = useRef<Record<string, TrendPoint[]>>({});
 
   useEffect(() => {
     document.body.classList.toggle("theme-light", theme === "light");
     document.body.classList.toggle("theme-dark", theme === "dark");
     window.localStorage.setItem(themeStorageKey, theme);
   }, [theme]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     api.getConnectionStatus().then((connectionStatus) => {
@@ -91,17 +116,55 @@ function App() {
     });
 
     const unsubscribe = subscribeBackendEvents({
-      onConnectionStatus: (connectionStatus) =>
+      onConnectionStatus: (connectionStatus) => {
         setState((current) => ({
           ...current,
           connectionStatus,
           pollingActive: connectionStatus.pollingActive,
-        })),
+        }));
+        pushInvestigationEvent({
+          tone: connectionStatus.connected ? "ok" : connectionStatus.state === "Error" ? "error" : "neutral",
+          message: connectionStatus.connected
+            ? `Connected to ${connectionStatus.config?.address ?? "controller"}`
+            : connectionStatus.state === "Error"
+            ? `Connection error`
+            : "Disconnected",
+          timestamp: new Date().toISOString(),
+        });
+      },
       onTagSnapshot: (snapshot) => applySnapshot(snapshot),
-      onTagChanged: (snapshot) => markTagChanged(snapshot.tagId),
-      onTagError: (snapshot) => applySnapshot(snapshot),
-      onWriteResult: (result) =>
-        setLastWrites((current) => ({ ...current, [result.tagId]: result })),
+      onTagChanged: (snapshot) => {
+        markTagChanged(snapshot.tagId);
+        pushInvestigationEvent({
+          tagId: snapshot.tagId,
+          tone: "ok",
+          message: `${snapshot.name} changed ${formatDelta(snapshot.currentValue, snapshot.previousValue).label}`,
+          timestamp: snapshot.lastChangedAt || new Date().toISOString(),
+        });
+      },
+      onTagError: (snapshot) => {
+        applySnapshot(snapshot);
+        pushInvestigationEvent({
+          tagId: snapshot.tagId,
+          tone: "error",
+          message: `${snapshot.name} read error`,
+          timestamp: snapshot.lastReadAt || new Date().toISOString(),
+        });
+      },
+      onWriteResult: (result) => {
+        setLastWrites((current) => ({ ...current, [result.tagId]: result }));
+        const mismatch = String(result.requestedValue) !== String(result.readbackValue);
+        pushInvestigationEvent({
+          tagId: result.tagId,
+          tone: result.success && !mismatch ? "ok" : mismatch ? "warn" : "error",
+          message: mismatch
+            ? `${result.name} write mismatch`
+            : result.success
+            ? `${result.name} write verified`
+            : `${result.name} write failed`,
+          timestamp: new Date().toISOString(),
+        });
+      },
       onAppEvent: (event) =>
         setState((current) => ({
           ...current,
@@ -127,15 +190,9 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    selectedTagIdRef.current = state.selectedTagId;
-    setSelectedTrendHistory(
-      state.selectedTagId ? trendHistoryRef.current[state.selectedTagId] ?? [] : []
-    );
-  }, [state.selectedTagId]);
-
   function applySnapshot(snapshot: TagSnapshot) {
     pendingSnapshotsRef.current[snapshot.tagId] = snapshot;
+    setTagHistory((current) => appendTagHistory(current, snapshot, historySampleLimit));
     if (snapshotFrameRef.current === undefined) {
       snapshotFrameRef.current = window.requestAnimationFrame(() => {
         snapshotFrameRef.current = undefined;
@@ -150,7 +207,6 @@ function App() {
         }));
       });
     }
-    applyTrendPoint(snapshot);
   }
 
   function markTagChanged(tagId: string) {
@@ -169,26 +225,28 @@ function App() {
     }, 1800);
   }
 
-  function applyTrendPoint(snapshot: TagSnapshot) {
-    if (snapshot.status !== "ok") {
-      return;
-    }
-    const value = trendValue(snapshot.currentValue);
-    if (value === undefined) {
-      return;
-    }
-    const timestamp = Date.parse(snapshot.lastReadAt) || Date.now();
-    const cutoff = timestamp - trendRetentionMs;
-    const existing = trendHistoryRef.current[snapshot.tagId] ?? [];
-    const last = existing[existing.length - 1];
-    if (last?.timestamp === timestamp && last.value === value) {
-      return;
-    }
-    const next = [...existing.filter((point) => point.timestamp >= cutoff), { timestamp, value }];
-    trendHistoryRef.current[snapshot.tagId] = next;
-    if (selectedTagIdRef.current === snapshot.tagId) {
-      setSelectedTrendHistory(next);
-    }
+  function pushInvestigationEvent(event: Omit<InvestigationEvent, "id">) {
+    setInvestigationEvents((current) =>
+      [
+        {
+          ...event,
+          id: `${event.timestamp}-${event.message}-${Math.random().toString(16).slice(2)}`,
+        },
+        ...current,
+      ].slice(0, 8)
+    );
+  }
+
+  function togglePinned(tagId: string) {
+    setPinnedTagIds((current) => {
+      const next = new Set(current);
+      if (next.has(tagId)) {
+        next.delete(tagId);
+      } else {
+        next.add(tagId);
+      }
+      return next;
+    });
   }
 
   async function connect(config: ConnectionConfig) {
@@ -212,10 +270,11 @@ function App() {
   async function updateTag(tag: WatchedTag) {
     await api.updateWatchedTag(tag);
     const watchedTags = await api.getWatchedTags();
-    delete trendHistoryRef.current[tag.id];
-    if (selectedTagIdRef.current === tag.id) {
-      setSelectedTrendHistory([]);
-    }
+    setTagHistory((current) => {
+      const next = { ...current };
+      delete next[tag.id];
+      return next;
+    });
     setState((current) => {
       const snapshotsByTagId = { ...current.snapshotsByTagId };
       delete snapshotsByTagId[tag.id];
@@ -230,10 +289,16 @@ function App() {
 
   async function removeTag(tagId: string) {
     await api.removeWatchedTag(tagId);
-    delete trendHistoryRef.current[tagId];
-    if (selectedTagIdRef.current === tagId) {
-      setSelectedTrendHistory([]);
-    }
+    setTagHistory((current) => {
+      const next = { ...current };
+      delete next[tagId];
+      return next;
+    });
+    setPinnedTagIds((current) => {
+      const next = new Set(current);
+      next.delete(tagId);
+      return next;
+    });
     setState((current) => {
       const snapshotsByTagId = { ...current.snapshotsByTagId };
       delete snapshotsByTagId[tagId];
@@ -267,8 +332,7 @@ function App() {
       selectedTagId: undefined,
     }));
     setChangedTagIds(new Set());
-    trendHistoryRef.current = {};
-    setSelectedTrendHistory([]);
+    setTagHistory({});
     return result;
   }
 
@@ -315,9 +379,62 @@ function App() {
   const selectedSnapshot = selectedTag
     ? state.snapshotsByTagId[selectedTag.id]
     : undefined;
+  const connectionConfig = state.connectionStatus.config;
+  const staleAfterMs = Math.max(5000, (connectionConfig?.pollIntervalMs ?? 1000) * 3);
+  const tableTrendWindow: TrendWindow = "30s";
+  const scopedRows = state.watchedTags.map((tag) => {
+    const snapshot = state.snapshotsByTagId[tag.id];
+    const status = runtimeStatus(snapshot, lastWrites[tag.id], nowMs, staleAfterMs);
+    const samples = samplesForWindow(tagHistory[tag.id] ?? [], tableTrendWindow, nowMs);
+    const activity = activityLevel(samples, snapshot, status);
+    return { tag, snapshot, status, activity };
+  });
+  const searchNeedle = search.trim().toLowerCase();
+  const visibleRows = scopedRows
+    .filter((row) => scopeMatches(row, scope, pinnedTagIds))
+    .filter((row) => !searchNeedle || row.tag.name.toLowerCase().includes(searchNeedle));
+  const focusSummary = visibleRows.reduce(
+    (summary, tag) => {
+      return {
+        changing: summary.changing + (tag.activity.changes > 0 ? 1 : 0),
+        stale: summary.stale + (tag.status.label === "STALE" ? 1 : 0),
+        errors: summary.errors + (tag.status.label === "ERROR" ? 1 : 0),
+        written:
+          summary.written +
+          (tag.status.label === "WRITTEN" || tag.status.label === "OVERRIDDEN" ? 1 : 0),
+      };
+    },
+    { changing: 0, stale: 0, errors: 0, written: 0 }
+  );
+  const pinnedTags = state.watchedTags.filter((tag) => pinnedTagIds.has(tag.id));
+
+  function selectTag(selectedTagId: string) {
+    setState((current) => ({ ...current, selectedTagId }));
+  }
+
+  function scopeMatches(
+    row: { tag: WatchedTag; status: ReturnType<typeof runtimeStatus>; activity: ReturnType<typeof activityLevel> },
+    currentScope: InvestigationScope,
+    pins: Set<string>
+  ) {
+    switch (currentScope) {
+      case "changing":
+        return row.activity.changes > 0 || changedTagIds.has(row.tag.id);
+      case "errors":
+        return row.status.label === "ERROR";
+      case "stale":
+        return row.status.label === "STALE";
+      case "written":
+        return row.status.label === "WRITTEN" || row.status.label === "OVERRIDDEN";
+      case "pinned":
+        return pins.has(row.tag.id);
+      default:
+        return true;
+    }
+  }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${consoleCollapsed ? "console-collapsed" : ""}`}>
       <header className="app-header">
         <div className="brand-block">
           <div className="brand-row">
@@ -349,14 +466,11 @@ function App() {
           >
             <span />
             <strong>{state.connectionStatus.connected ? "Connected" : "Connect"}</strong>
-            <em>
-              {state.connectionStatus.connected
-                ? state.connectionStatus.config?.address ?? "controller"
-                : state.pollingActive
-                ? "live"
-                : "idle"}
-            </em>
           </button>
+          <div className="connection-details" aria-label="PLC connection details">
+            <span>{connectionConfig?.address ?? "No PLC target"}</span>
+            <span>{connectionConfig ? `${connectionConfig.pollIntervalMs} ms poll` : "polling idle"}</span>
+          </div>
           <button
             className="theme-toggle"
             type="button"
@@ -368,46 +482,181 @@ function App() {
             {theme === "light" ? <MoonIcon /> : <SunIcon />}
           </button>
           <button className="header-tool" type="button" onClick={() => setWatchListOpen(true)}>
-            Watch Lists
+            Saved Sessions
           </button>
         </div>
       </header>
-      <div className={`workspace ${selectedTag ? "has-inspector" : ""}`}>
-        <LiveWatchTable
-          tags={state.watchedTags}
-          snapshotsByTagId={state.snapshotsByTagId}
-          selectedTagId={state.selectedTagId}
-          changedTagIds={changedTagIds}
-          connected={state.connectionStatus.connected}
-          search={search}
-          pollingActive={state.pollingActive}
-          onSearchChange={setSearch}
-          onTogglePolling={togglePolling}
-          onClearHighlights={() => setChangedTagIds(new Set())}
-          onConnect={() => setConnectionOpen(true)}
-          onAddTag={() => setAddTagOpen(true)}
-          onDiscoverTags={() => setDiscoverOpen(true)}
-          onSelect={(selectedTagId) =>
-            setState((current) => ({ ...current, selectedTagId }))
-          }
-          onEdit={setEditingTag}
-          onRemove={removeTag}
-        />
-        {selectedTag ? (
-          <TagInspector
-            tag={selectedTag}
-            snapshot={selectedSnapshot}
-            history={selectedTrendHistory}
-            lastWrite={lastWrites[selectedTag.id]}
-            onWrite={writeSelected}
-            onClose={() =>
-              setState((current) => ({ ...current, selectedTagId: undefined }))
-            }
+      <div className="app-body">
+        <aside className="left-sidebar" aria-label="Investigation navigator">
+          <section className="sidebar-section">
+            <div className="sidebar-heading">Connection</div>
+            <button
+              className={`sidebar-connection ${state.connectionStatus.connected ? "is-connected" : "is-disconnected"}`}
+              type="button"
+              onClick={() => setConnectionOpen(true)}
+            >
+              <span />
+              <strong>{state.connectionStatus.connected ? "Connected" : "Disconnected"}</strong>
+              <em>{connectionConfig?.address ?? "No PLC target"}</em>
+              <em>{connectionConfig ? `Poll: ${connectionConfig.pollIntervalMs} ms` : "Poll: idle"}</em>
+            </button>
+          </section>
+          <section className="sidebar-section">
+            <div className="sidebar-heading">Focus</div>
+            <dl className="sidebar-metrics compact">
+              <dt>Visible</dt>
+              <dd>{visibleRows.length}</dd>
+              <dt>Changing</dt>
+              <dd>{focusSummary.changing}</dd>
+              <dt>Stale</dt>
+              <dd className={focusSummary.stale ? "metric-warn" : ""}>{focusSummary.stale}</dd>
+              <dt>Errors</dt>
+              <dd className={focusSummary.errors ? "metric-error" : ""}>{focusSummary.errors}</dd>
+              <dt>Written</dt>
+              <dd>{focusSummary.written}</dd>
+            </dl>
+          </section>
+          <section className="sidebar-section">
+            <div className="sidebar-heading">Scopes</div>
+            <div className="scope-list">
+              {([
+                ["all", "All", state.watchedTags.length],
+                ["changing", "Changing", scopedRows.filter((row) => row.activity.changes > 0).length],
+                ["errors", "Errors", scopedRows.filter((row) => row.status.label === "ERROR").length],
+                ["stale", "Stale", scopedRows.filter((row) => row.status.label === "STALE").length],
+                [
+                  "written",
+                  "Written",
+                  scopedRows.filter(
+                    (row) => row.status.label === "WRITTEN" || row.status.label === "OVERRIDDEN"
+                  ).length,
+                ],
+                ["pinned", "Pinned", pinnedTagIds.size],
+              ] as Array<[InvestigationScope, string, number]>).map(([key, label, count]) => (
+                <button
+                  key={key}
+                  className={`scope-row ${scope === key ? "is-selected" : ""}`}
+                  type="button"
+                  onClick={() => setScope(key)}
+                >
+                  <span>{label}</span>
+                  <em>{count}</em>
+                </button>
+              ))}
+            </div>
+          </section>
+          <section className="sidebar-section pinned-section">
+            <div className="sidebar-heading">Pinned</div>
+            <div className="pinned-list">
+              {pinnedTags.length === 0 ? (
+                <div className="sidebar-empty">Pin tags from the table.</div>
+              ) : (
+                pinnedTags.map((tag) => {
+                  const snapshot = state.snapshotsByTagId[tag.id];
+                  const status = runtimeStatus(snapshot, lastWrites[tag.id], nowMs, staleAfterMs);
+                  const delta = formatDelta(snapshot?.currentValue, snapshot?.previousValue);
+                  return (
+                    <button
+                      key={tag.id}
+                      className={`pinned-row ${state.selectedTagId === tag.id ? "is-selected" : ""}`}
+                      type="button"
+                      onClick={() => selectTag(tag.id)}
+                      title={tag.name}
+                    >
+                      <span className={`row-status-dot status-${status.tone}`} />
+                      <code>{tag.name}</code>
+                      <em className={`delta-${delta.tone}`}>{delta.label}</em>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </section>
+          <section className="sidebar-section recent-events-section">
+            <div className="sidebar-heading">Recent Events</div>
+            <div className="recent-event-list">
+              {investigationEvents.length === 0 ? (
+                <div className="sidebar-empty">No meaningful events yet.</div>
+              ) : (
+                investigationEvents.map((event) => (
+                  <button
+                    key={event.id}
+                    className={`recent-event-row event-${event.tone}`}
+                    type="button"
+                    disabled={!event.tagId}
+                    onClick={() => event.tagId && selectTag(event.tagId)}
+                    title={event.message}
+                  >
+                    <span />
+                    <strong>{event.message}</strong>
+                    <em>{new Date(event.timestamp).toLocaleTimeString([], { hour12: false, minute: "2-digit", second: "2-digit" })}</em>
+                  </button>
+                ))
+              )}
+            </div>
+          </section>
+          <section className="sidebar-section">
+            <div className="sidebar-heading">Actions</div>
+            <div className="sidebar-actions compact-actions">
+              <button className="tool-link primary-action" type="button" disabled={!state.connectionStatus.connected} onClick={() => setAddTagOpen(true)}>
+                + Add Tag
+              </button>
+              <button className="tool-link" type="button" disabled={!state.connectionStatus.connected} onClick={() => setDiscoverOpen(true)}>
+                Discover Tags
+              </button>
+              <button className="tool-link" type="button" onClick={() => setWatchListOpen(true)}>
+                Save Session
+              </button>
+              <button className="tool-link" type="button" onClick={() => setChangedTagIds(new Set())}>
+                Clear Highlights
+              </button>
+            </div>
+          </section>
+        </aside>
+        <div className={`workspace ${selectedTag ? "has-inspector" : ""}`}>
+          <LiveWatchTable
+            tags={state.watchedTags}
+            snapshotsByTagId={state.snapshotsByTagId}
+            historiesByTagId={tagHistory}
+            lastWritesByTagId={lastWrites}
+            selectedTagId={state.selectedTagId}
+            changedTagIds={changedTagIds}
+            nowMs={nowMs}
+            staleAfterMs={staleAfterMs}
+            scope={scope}
+            pinnedTagIds={pinnedTagIds}
+            trendWindow={tableTrendWindow}
+            onTogglePinned={togglePinned}
+            connected={state.connectionStatus.connected}
+            search={search}
+            pollingActive={state.pollingActive}
+            onSearchChange={setSearch}
+            onTogglePolling={togglePolling}
+            onConnect={() => setConnectionOpen(true)}
+            onSelect={selectTag}
+            onEdit={setEditingTag}
+            onRemove={removeTag}
           />
-        ) : null}
+          {selectedTag ? (
+            <TagInspector
+              tag={selectedTag}
+              snapshot={selectedSnapshot}
+              history={tagHistory[selectedTag.id] ?? []}
+              lastWrite={lastWrites[selectedTag.id]}
+              nowMs={nowMs}
+              staleAfterMs={staleAfterMs}
+              onWrite={writeSelected}
+              onClose={() =>
+                setState((current) => ({ ...current, selectedTagId: undefined }))
+              }
+            />
+          ) : null}
+        </div>
       </div>
       <EventConsole
         events={state.events}
+        collapsed={consoleCollapsed}
+        onToggleCollapsed={() => setConsoleCollapsed((current) => !current)}
         onClear={() => setState((current) => ({ ...current, events: [] }))}
       />
       {addTagOpen ? (
@@ -512,16 +761,6 @@ function App() {
 }
 
 export default App;
-
-function trendValue(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "boolean") {
-    return value ? 1 : 0;
-  }
-  return undefined;
-}
 
 function SunIcon() {
   return (

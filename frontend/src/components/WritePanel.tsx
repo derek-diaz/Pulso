@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { WatchedTag, WriteResult } from "../types";
 import { formatValue } from "../format";
+import { hasReadbackMismatch } from "../tagHistory";
 import { StatusBadge } from "./StatusBadge";
 
 type Props = {
@@ -26,13 +27,13 @@ export function WritePanel({ tag, lastWrite, onWrite }: Props) {
 
   return (
     <section className="panel-card write-card">
-      <div className="section-title">Write Tool</div>
+      <div className="section-title">Write</div>
       {readOnly ? (
         <div className="inline-note">STRUCT tags are read-only raw payloads.</div>
       ) : null}
       <form className="stack" onSubmit={submit}>
         <label>
-          New value for <code>{tag.name}</code>
+          New value
           <input
             value={value}
             onChange={(event) => setValue(event.target.value)}
@@ -41,7 +42,7 @@ export function WritePanel({ tag, lastWrite, onWrite }: Props) {
           />
         </label>
         <button className="primary" type="submit" disabled={busy || readOnly}>
-          {busy ? "Writing + verifying" : "Write + Verify"}
+          {busy ? "Writing..." : "Write + Verify"}
         </button>
       </form>
       {lastWrite ? (
@@ -49,8 +50,8 @@ export function WritePanel({ tag, lastWrite, onWrite }: Props) {
           <div className="section-title compact">
             <span>Last Write</span>
             <StatusBadge
-              label={lastWrite.success ? "verified" : "failed"}
-              tone={lastWrite.success ? "ok" : lastWrite.error ? "error" : "warn"}
+              label={hasReadbackMismatch(lastWrite) ? "readback mismatch" : lastWrite.success ? "verified" : "failed"}
+              tone={hasReadbackMismatch(lastWrite) ? "warn" : lastWrite.success ? "ok" : lastWrite.error ? "error" : "warn"}
             />
           </div>
           <dl className="inspector-grid">

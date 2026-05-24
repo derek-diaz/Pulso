@@ -99,23 +99,27 @@ export function TagInspector({
 
       <section className="panel-card inspector-card">
         <div className="inspector-sample-header">
-          <div className="section-title">
-            Recent samples <span>{sampleWindow === "all" ? "all" : sampleWindow}</span>
-          </div>
+          <div className="section-title">Recent samples</div>
           <div className="trend-window-control" role="group" aria-label="Inspector sample window">
-            {(["10s", "30s", "1m", "5m", "all"] as TrendWindow[]).map((option) => (
+            {(["10s", "30s", "1m", "5m"] as TrendWindow[]).map((option) => (
               <button
                 key={option}
                 type="button"
                 className={sampleWindow === option ? "is-active" : ""}
                 onClick={() => setSampleWindow(option)}
               >
-                {option === "all" ? "All" : option}
+                {option}
               </button>
             ))}
           </div>
         </div>
-        <InlineTrend dataType={tag.dataType} samples={visibleHistory} selected size="inspector" />
+        <InlineTrend
+          key={`${tag.id}-${sampleWindow}`}
+          dataType={tag.dataType}
+          samples={visibleHistory}
+          selected
+          size="inspector"
+        />
         <SampleSummary dataType={tag.dataType} samples={visibleHistory} size="inspector" />
       </section>
 

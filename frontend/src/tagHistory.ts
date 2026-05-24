@@ -66,8 +66,7 @@ export function samplesForWindow(
     return scoped;
   }
 
-  const fallbackCount = window === "10s" ? 12 : window === "30s" ? 24 : window === "1m" ? 40 : 60;
-  return samples.slice(-fallbackCount);
+  return [];
 }
 
 export function trendWindowMs(window: TrendWindow): number {

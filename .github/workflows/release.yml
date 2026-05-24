@@ -1,0 +1,124 @@
+name: Release Installers
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  linux-deb:
+    name: Linux Debian package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build PLC-enabled .deb
+        env:
+          PULSO_VERSION: ${{ github.ref_name }}
+        run: |
+          export PULSO_VERSION="${PULSO_VERSION#v}"
+          ./scripts/docker-build-plc.sh linux-deb
+
+      - name: Upload Linux package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulso-linux-amd64-deb
+          path: build/bin/*.deb
+          if-no-files-found: error
+
+  windows-installer:
+    name: Windows NSIS installer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build PLC-enabled Windows installer
+        run: ./scripts/docker-build-plc.sh windows-amd64
+
+      - name: Rename Windows installer
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mv build/bin/Pulso-amd64-installer.exe "build/bin/Pulso-${version}-windows-amd64-installer.exe"
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulso-windows-amd64-installer
+          path: build/bin/Pulso-*-windows-amd64-installer.exe
+          if-no-files-found: error
+
+  macos-app:
+    name: macOS app bundle
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.0
+
+      - name: Build macOS universal app
+        run: |
+          wails build -platform darwin/universal -skipbindings
+
+      - name: Package macOS app
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          ditto -c -k --keepParent build/bin/Pulso.app "build/bin/Pulso-${version}-darwin-universal.zip"
+
+      - name: Upload macOS app
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulso-darwin-universal-app
+          path: build/bin/Pulso-*-darwin-universal.zip
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub release
+    needs:
+      - linux-deb
+      - windows-installer
+      - macos-app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            gh release upload "${TAG_NAME}" release-artifacts/* --clobber
+          else
+            gh release create "${TAG_NAME}" release-artifacts/* \
+              --title "Pulso ${TAG_NAME}" \
+              --notes "Automated Pulso release build for ${TAG_NAME}."
+          fi

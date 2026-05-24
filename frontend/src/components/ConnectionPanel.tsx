@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { ConnectionConfig, ConnectionStatus } from "../types";
 import { useLocalHistory } from "../localHistory";
 import { HistoryInput } from "./HistoryInput";
@@ -25,15 +25,23 @@ export function ConnectionPanel({ status, onConnect, onDisconnect, embedded = fa
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const addressHistory = useLocalHistory("pulso.plcAddressHistory");
+  const { items: addressHistoryItems, remember: rememberAddress } = useLocalHistory(
+    "pulso.plcAddressHistory"
+  );
+
+  useEffect(() => {
+    if (status.config?.address) {
+      rememberAddress(status.config.address);
+    }
+  }, [rememberAddress, status.config?.address]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setSubmitError("");
     setBusy(true);
+    rememberAddress(config.address);
     try {
       await onConnect(config);
-      addressHistory.remember(config.address);
       setEditing(false);
     } catch (caught) {
       setSubmitError(errorMessage(caught));
@@ -97,7 +105,7 @@ export function ConnectionPanel({ status, onConnect, onDisconnect, embedded = fa
         <HistoryInput
           label="PLC IP Address"
           value={config.address}
-          history={addressHistory.items}
+          history={addressHistoryItems}
           onChange={(address) => setConfig({ ...config, address })}
           placeholder="192.168.1.10"
         />

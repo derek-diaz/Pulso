@@ -8,10 +8,15 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+//go:embed build/appicon.png
+var appIcon []byte
 
 func main() {
 	app := backend.NewApp()
@@ -25,6 +30,16 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 9, G: 14, B: 20, A: 1},
 		OnStartup:        app.Startup,
+		Mac: &mac.Options{
+			About: &mac.AboutInfo{
+				Title: "Pulso",
+				Icon:  appIcon,
+			},
+		},
+		Linux: &linux.Options{
+			Icon:        appIcon,
+			ProgramName: "Pulso",
+		},
 		Bind: []interface{}{
 			app,
 		},

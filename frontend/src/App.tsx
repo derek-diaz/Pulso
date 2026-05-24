@@ -40,17 +40,20 @@ const initialEvent: AppEvent = {
 };
 
 type ThemeMode = "dark" | "light";
+type RailIconName =
+  | "add"
+  | "discover"
+  | "all"
+  | "changing"
+  | "errors"
+  | "stale"
+  | "written"
+  | "pinned"
+  | "settings";
 
 const themeStorageKey = "pulso-theme";
-const historySampleLimit = 60;
-
-type InvestigationEvent = {
-  id: string;
-  tagId?: string;
-  tone: "neutral" | "ok" | "warn" | "error";
-  message: string;
-  timestamp: string;
-};
+const sidebarCollapsedStorageKey = "pulso-sidebar-collapsed";
+const historySampleLimit = 1800;
 
 function getInitialTheme(): ThemeMode {
   const savedTheme = window.localStorage.getItem(themeStorageKey);
@@ -58,6 +61,10 @@ function getInitialTheme(): ThemeMode {
     return savedTheme;
   }
   return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function getInitialSidebarCollapsed() {
+  return window.localStorage.getItem(sidebarCollapsedStorageKey) === "true";
 }
 
 function App() {
@@ -78,7 +85,6 @@ function App() {
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<InvestigationScope>("all");
   const [pinnedTagIds, setPinnedTagIds] = useState<Set<string>>(new Set());
-  const [investigationEvents, setInvestigationEvents] = useState<InvestigationEvent[]>([]);
   const [lastWrites, setLastWrites] = useState<Record<string, WriteResult>>({});
   const [addTagOpen, setAddTagOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<WatchedTag>();
@@ -87,6 +93,7 @@ function App() {
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [watchListOpen, setWatchListOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialSidebarCollapsed);
   const [consoleCollapsed, setConsoleCollapsed] = useState(false);
   const changeTimersRef = useRef<Record<string, number>>({});
   const pendingSnapshotsRef = useRef<Record<string, TagSnapshot>>({});
@@ -97,6 +104,10 @@ function App() {
     document.body.classList.toggle("theme-dark", theme === "dark");
     window.localStorage.setItem(themeStorageKey, theme);
   }, [theme]);
+
+  useEffect(() => {
+    window.localStorage.setItem(sidebarCollapsedStorageKey, String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -122,48 +133,16 @@ function App() {
           connectionStatus,
           pollingActive: connectionStatus.pollingActive,
         }));
-        pushInvestigationEvent({
-          tone: connectionStatus.connected ? "ok" : connectionStatus.state === "Error" ? "error" : "neutral",
-          message: connectionStatus.connected
-            ? `Connected to ${connectionStatus.config?.address ?? "controller"}`
-            : connectionStatus.state === "Error"
-            ? `Connection error`
-            : "Disconnected",
-          timestamp: new Date().toISOString(),
-        });
       },
       onTagSnapshot: (snapshot) => applySnapshot(snapshot),
       onTagChanged: (snapshot) => {
         markTagChanged(snapshot.tagId);
-        pushInvestigationEvent({
-          tagId: snapshot.tagId,
-          tone: "ok",
-          message: `${snapshot.name} changed ${formatDelta(snapshot.currentValue, snapshot.previousValue).label}`,
-          timestamp: snapshot.lastChangedAt || new Date().toISOString(),
-        });
       },
       onTagError: (snapshot) => {
         applySnapshot(snapshot);
-        pushInvestigationEvent({
-          tagId: snapshot.tagId,
-          tone: "error",
-          message: `${snapshot.name} read error`,
-          timestamp: snapshot.lastReadAt || new Date().toISOString(),
-        });
       },
       onWriteResult: (result) => {
         setLastWrites((current) => ({ ...current, [result.tagId]: result }));
-        const mismatch = String(result.requestedValue) !== String(result.readbackValue);
-        pushInvestigationEvent({
-          tagId: result.tagId,
-          tone: result.success && !mismatch ? "ok" : mismatch ? "warn" : "error",
-          message: mismatch
-            ? `${result.name} write mismatch`
-            : result.success
-            ? `${result.name} write verified`
-            : `${result.name} write failed`,
-          timestamp: new Date().toISOString(),
-        });
       },
       onAppEvent: (event) =>
         setState((current) => ({
@@ -223,18 +202,6 @@ function App() {
         return next;
       });
     }, 1800);
-  }
-
-  function pushInvestigationEvent(event: Omit<InvestigationEvent, "id">) {
-    setInvestigationEvents((current) =>
-      [
-        {
-          ...event,
-          id: `${event.timestamp}-${event.message}-${Math.random().toString(16).slice(2)}`,
-        },
-        ...current,
-      ].slice(0, 8)
-    );
   }
 
   function togglePinned(tagId: string) {
@@ -406,6 +373,21 @@ function App() {
     },
     { changing: 0, stale: 0, errors: 0, written: 0 }
   );
+  const scopeOptions: Array<[InvestigationScope, string, number, RailIconName]> = [
+    ["all", "All", state.watchedTags.length, "all"],
+    ["changing", "Changing", scopedRows.filter((row) => row.activity.changes > 0).length, "changing"],
+    ["errors", "Errors", scopedRows.filter((row) => row.status.label === "ERROR").length, "errors"],
+    ["stale", "Stale", scopedRows.filter((row) => row.status.label === "STALE").length, "stale"],
+    [
+      "written",
+      "Written",
+      scopedRows.filter(
+        (row) => row.status.label === "WRITTEN" || row.status.label === "OVERRIDDEN"
+      ).length,
+      "written",
+    ],
+    ["pinned", "Pinned", pinnedTagIds.size, "pinned"],
+  ];
   const pinnedTags = state.watchedTags.filter((tag) => pinnedTagIds.has(tag.id));
 
   function selectTag(selectedTagId: string) {
@@ -486,132 +468,142 @@ function App() {
           </button>
         </div>
       </header>
-      <div className="app-body">
-        <aside className="left-sidebar" aria-label="Investigation navigator">
-          <section className="sidebar-section">
-            <div className="sidebar-heading">Connection</div>
+      <div className={`app-body ${sidebarCollapsed ? "sidebar-is-collapsed" : ""}`}>
+        <aside
+          className={`left-sidebar ${sidebarCollapsed ? "is-collapsed" : ""}`}
+          aria-label="Workflow sidebar"
+        >
+          <div className="sidebar-topline">
+            {!sidebarCollapsed ? <span className="sidebar-heading">Connection</span> : null}
             <button
-              className={`sidebar-connection ${state.connectionStatus.connected ? "is-connected" : "is-disconnected"}`}
+              className="sidebar-collapse-toggle"
               type="button"
-              onClick={() => setConnectionOpen(true)}
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              onClick={() => setSidebarCollapsed((current) => !current)}
             >
-              <span />
-              <strong>{state.connectionStatus.connected ? "Connected" : "Disconnected"}</strong>
-              <em>{connectionConfig?.address ?? "No PLC target"}</em>
-              <em>{connectionConfig ? `Poll: ${connectionConfig.pollIntervalMs} ms` : "Poll: idle"}</em>
+              {sidebarCollapsed ? (
+                <ChevronRightIcon />
+              ) : (
+                <>
+                  <span>Collapse</span>
+                  <ChevronLeftIcon />
+                </>
+              )}
             </button>
-          </section>
-          <section className="sidebar-section">
-            <div className="sidebar-heading">Focus</div>
-            <dl className="sidebar-metrics compact">
-              <dt>Visible</dt>
-              <dd>{visibleRows.length}</dd>
-              <dt>Changing</dt>
-              <dd>{focusSummary.changing}</dd>
-              <dt>Stale</dt>
-              <dd className={focusSummary.stale ? "metric-warn" : ""}>{focusSummary.stale}</dd>
-              <dt>Errors</dt>
-              <dd className={focusSummary.errors ? "metric-error" : ""}>{focusSummary.errors}</dd>
-              <dt>Written</dt>
-              <dd>{focusSummary.written}</dd>
-            </dl>
-          </section>
-          <section className="sidebar-section">
-            <div className="sidebar-heading">Scopes</div>
-            <div className="scope-list">
-              {([
-                ["all", "All", state.watchedTags.length],
-                ["changing", "Changing", scopedRows.filter((row) => row.activity.changes > 0).length],
-                ["errors", "Errors", scopedRows.filter((row) => row.status.label === "ERROR").length],
-                ["stale", "Stale", scopedRows.filter((row) => row.status.label === "STALE").length],
-                [
-                  "written",
-                  "Written",
-                  scopedRows.filter(
-                    (row) => row.status.label === "WRITTEN" || row.status.label === "OVERRIDDEN"
-                  ).length,
-                ],
-                ["pinned", "Pinned", pinnedTagIds.size],
-              ] as Array<[InvestigationScope, string, number]>).map(([key, label, count]) => (
+          </div>
+          {sidebarCollapsed ? (
+            <div className="sidebar-rail" aria-label="Collapsed workflow actions">
+              <div className="sidebar-rail-banner">Tools</div>
+              <button className="rail-button primary-rail" type="button" disabled={!state.connectionStatus.connected} title="Add Tag" aria-label="Add Tag" data-tooltip="Add Tag" onClick={() => setAddTagOpen(true)}>
+                <RailIcon name="add" />
+              </button>
+              <button className="rail-button" type="button" disabled={!state.connectionStatus.connected} title="Discover Tags" aria-label="Discover Tags" data-tooltip="Discover Tags" onClick={() => setDiscoverOpen(true)}>
+                <RailIcon name="discover" />
+              </button>
+              <div className="rail-separator" aria-hidden="true" />
+              {scopeOptions.map(([key, label, count, icon]) => (
                 <button
                   key={key}
-                  className={`scope-row ${scope === key ? "is-selected" : ""}`}
+                  className={`rail-button scope-rail ${scope === key ? "is-selected" : ""}`}
                   type="button"
+                  title={`${label} (${count})`}
+                  aria-label={`${label} scope, ${count}`}
+                  data-tooltip={`${label} (${count})`}
                   onClick={() => setScope(key)}
                 >
-                  <span>{label}</span>
-                  <em>{count}</em>
+                  <RailIcon name={icon} />
                 </button>
               ))}
+              <div className="rail-separator" aria-hidden="true" />
+              <button className="rail-button rail-settings" type="button" title="Connection Settings" aria-label="Connection Settings" data-tooltip="Connection Settings" onClick={() => setConnectionOpen(true)}>
+                <RailIcon name="settings" />
+              </button>
             </div>
-          </section>
-          <section className="sidebar-section pinned-section">
-            <div className="sidebar-heading">Pinned</div>
-            <div className="pinned-list">
-              {pinnedTags.length === 0 ? (
-                <div className="sidebar-empty">Pin tags from the table.</div>
-              ) : (
-                pinnedTags.map((tag) => {
-                  const snapshot = state.snapshotsByTagId[tag.id];
-                  const status = runtimeStatus(snapshot, lastWrites[tag.id], nowMs, staleAfterMs);
-                  const delta = formatDelta(snapshot?.currentValue, snapshot?.previousValue);
-                  return (
-                    <button
-                      key={tag.id}
-                      className={`pinned-row ${state.selectedTagId === tag.id ? "is-selected" : ""}`}
-                      type="button"
-                      onClick={() => selectTag(tag.id)}
-                      title={tag.name}
-                    >
-                      <span className={`row-status-dot status-${status.tone}`} />
-                      <code>{tag.name}</code>
-                      <em className={`delta-${delta.tone}`}>{delta.label}</em>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </section>
-          <section className="sidebar-section recent-events-section">
-            <div className="sidebar-heading">Recent Events</div>
-            <div className="recent-event-list">
-              {investigationEvents.length === 0 ? (
-                <div className="sidebar-empty">No meaningful events yet.</div>
-              ) : (
-                investigationEvents.map((event) => (
-                  <button
-                    key={event.id}
-                    className={`recent-event-row event-${event.tone}`}
-                    type="button"
-                    disabled={!event.tagId}
-                    onClick={() => event.tagId && selectTag(event.tagId)}
-                    title={event.message}
-                  >
-                    <span />
-                    <strong>{event.message}</strong>
-                    <em>{new Date(event.timestamp).toLocaleTimeString([], { hour12: false, minute: "2-digit", second: "2-digit" })}</em>
+          ) : (
+            <>
+              <section className="sidebar-section connection-section">
+                <button
+                  className={`sidebar-connection ${state.connectionStatus.connected ? "is-connected" : "is-disconnected"}`}
+                  type="button"
+                  onClick={() => setConnectionOpen(true)}
+                >
+                  <span />
+                  <strong>{state.connectionStatus.connected ? "Connected" : "Disconnected"}</strong>
+                  <em>{connectionConfig?.address ?? "No PLC target"}</em>
+                  <em>{connectionConfig ? `Poll: ${connectionConfig.pollIntervalMs} ms` : "Poll: idle"}</em>
+                </button>
+              </section>
+              <section className="sidebar-section">
+                <div className="sidebar-heading">Primary</div>
+                <div className="sidebar-actions primary-actions">
+                  <button className="tool-link primary-action" type="button" disabled={!state.connectionStatus.connected} onClick={() => setAddTagOpen(true)}>
+                    + Add Tag
                   </button>
-                ))
-              )}
-            </div>
-          </section>
-          <section className="sidebar-section">
-            <div className="sidebar-heading">Actions</div>
-            <div className="sidebar-actions compact-actions">
-              <button className="tool-link primary-action" type="button" disabled={!state.connectionStatus.connected} onClick={() => setAddTagOpen(true)}>
-                + Add Tag
-              </button>
-              <button className="tool-link" type="button" disabled={!state.connectionStatus.connected} onClick={() => setDiscoverOpen(true)}>
-                Discover Tags
-              </button>
-              <button className="tool-link" type="button" onClick={() => setWatchListOpen(true)}>
-                Save Session
-              </button>
-              <button className="tool-link" type="button" onClick={() => setChangedTagIds(new Set())}>
-                Clear Highlights
-              </button>
-            </div>
-          </section>
+                  <button className="tool-link" type="button" disabled={!state.connectionStatus.connected} onClick={() => setDiscoverOpen(true)}>
+                    Discover Tags
+                  </button>
+                </div>
+              </section>
+              <section className="sidebar-section">
+                <div className="sidebar-heading">Focus</div>
+                <div className="scope-list">
+                  {scopeOptions.map(([key, label, count]) => (
+                    <button
+                      key={key}
+                      className={`scope-row ${scope === key ? "is-selected" : ""}`}
+                      type="button"
+                      onClick={() => setScope(key)}
+                    >
+                      <span>{label}</span>
+                      <em>{count}</em>
+                    </button>
+                  ))}
+                </div>
+              </section>
+              <section className="sidebar-section pinned-section">
+                <div className="sidebar-heading">Pinned</div>
+                <div className="pinned-list">
+                  {pinnedTags.length === 0 ? (
+                    <div className="sidebar-empty">Pin tags from the table.</div>
+                  ) : (
+                    pinnedTags.map((tag) => {
+                      const snapshot = state.snapshotsByTagId[tag.id];
+                      const status = runtimeStatus(snapshot, lastWrites[tag.id], nowMs, staleAfterMs);
+                      const delta = formatDelta(snapshot?.currentValue, snapshot?.previousValue);
+                      return (
+                        <button
+                          key={tag.id}
+                          className={`pinned-row ${state.selectedTagId === tag.id ? "is-selected" : ""}`}
+                          type="button"
+                          onClick={() => selectTag(tag.id)}
+                          title={tag.name}
+                        >
+                          <span className={`row-status-dot status-${status.tone}`} />
+                          <code>{tag.name}</code>
+                          <em className={`delta-${delta.tone}`}>{delta.label}</em>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </section>
+              <section className="sidebar-section secondary-section">
+                <div className="sidebar-heading">Secondary</div>
+                <div className="sidebar-actions secondary-actions">
+                  <button className="tool-link" type="button" onClick={() => setWatchListOpen(true)}>
+                    Save Session
+                  </button>
+                  <button className="tool-link" type="button" onClick={() => setChangedTagIds(new Set())}>
+                    Clear Highlights
+                  </button>
+                  <button className="tool-link" type="button" onClick={() => setConnectionOpen(true)}>
+                    Connection Settings
+                  </button>
+                </div>
+              </section>
+            </>
+          )}
         </aside>
         <div className={`workspace ${selectedTag ? "has-inspector" : ""}`}>
           <LiveWatchTable
@@ -629,6 +621,12 @@ function App() {
             onTogglePinned={togglePinned}
             connected={state.connectionStatus.connected}
             search={search}
+            summary={{
+              shown: visibleRows.length,
+              changing: focusSummary.changing,
+              stale: focusSummary.stale,
+              errors: focusSummary.errors,
+            }}
             pollingActive={state.pollingActive}
             onSearchChange={setSearch}
             onTogglePolling={togglePolling}
@@ -776,4 +774,85 @@ function MoonIcon() {
       <path d="M13.7 15.4A6.6 6.6 0 0 1 8.1 4.7a5.2 5.2 0 1 0 7.2 7.2 6.5 6.5 0 0 1-1.6 3.5Zm-3.2 1.4a6.6 6.6 0 0 0 6.3-8.7l-.5-1.4-.9 1.2a3.8 3.8 0 0 1-6.1-4.4l.8-1.2-1.4.2a6.6 6.6 0 0 0 1.8 14.3Z" />
     </svg>
   );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M10 3 5 8l5 5" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="m6 3 5 5-5 5" />
+    </svg>
+  );
+}
+
+function RailIcon({ name }: { name: RailIconName }) {
+  switch (name) {
+    case "add":
+      return (
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M10 4v12M4 10h12" />
+        </svg>
+      );
+    case "discover":
+      return (
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <circle cx="9" cy="9" r="5" />
+          <path d="m13 13 3 3" />
+        </svg>
+      );
+    case "all":
+      return (
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M5 5h10M5 10h10M5 15h10" />
+        </svg>
+      );
+    case "changing":
+      return (
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M3 11h3l2-5 4 9 2-4h3" />
+        </svg>
+      );
+    case "errors":
+      return (
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M10 4v7" />
+          <path d="M10 15h.01" />
+          <path d="M10 2 2.8 17h14.4L10 2Z" />
+        </svg>
+      );
+    case "stale":
+      return (
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <circle cx="10" cy="10" r="7" />
+          <path d="M10 6v4l3 2" />
+        </svg>
+      );
+    case "written":
+      return (
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M4 14.5V16h1.5L15 6.5 13.5 5 4 14.5Z" />
+          <path d="m12.5 6 1.5 1.5" />
+        </svg>
+      );
+    case "pinned":
+      return (
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="m10 3 2.1 4.3 4.7.7-3.4 3.3.8 4.7-4.2-2.2L5.8 16l.8-4.7L3.2 8l4.7-.7L10 3Z" />
+        </svg>
+      );
+    case "settings":
+      return (
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <circle cx="10" cy="10" r="3" />
+          <path d="M10 2.5v2M10 15.5v2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M2.5 10h2M15.5 10h2M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4" />
+        </svg>
+      );
+  }
 }

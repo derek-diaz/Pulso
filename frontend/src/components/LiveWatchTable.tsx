@@ -31,6 +31,12 @@ type Props = {
   onTogglePinned: (tagId: string) => void;
   connected: boolean;
   search: string;
+  summary: {
+    shown: number;
+    changing: number;
+    stale: number;
+    errors: number;
+  };
   pollingActive: boolean;
   onSearchChange: (value: string) => void;
   onTogglePolling: () => void;
@@ -68,6 +74,7 @@ export function LiveWatchTable({
   onTogglePinned,
   connected,
   search,
+  summary,
   pollingActive,
   onSearchChange,
   onTogglePolling,
@@ -136,7 +143,9 @@ export function LiveWatchTable({
         <div className="toolbar-left">
           <div className="table-title">
             <strong>Live Watch</strong>
-            <span>{rowModels.length} shown</span>
+            <span>
+              {summary.shown} shown · {summary.changing} changing · {summary.stale} stale · {summary.errors} errors
+            </span>
           </div>
         </div>
         <div className="toolbar-right">

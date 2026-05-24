@@ -11,6 +11,7 @@ import { WatchListModal } from "./components/WatchListModal";
 import { ScopeOption, WorkflowSidebar } from "./components/WorkflowSidebar";
 import { api } from "./services/api";
 import { subscribeBackendEvents } from "./services/events";
+import { applyThemeTokens, ThemeMode } from "./theme";
 import {
   activityLevel,
   appendTagHistory,
@@ -39,8 +40,6 @@ const initialEvent: AppEvent = {
   message: "Pulso ready",
   timestamp: new Date().toISOString(),
 };
-
-type ThemeMode = "dark" | "light";
 
 const themeStorageKey = "pulso-theme";
 const sidebarCollapsedStorageKey = "pulso-sidebar-collapsed";
@@ -91,6 +90,7 @@ function App() {
   const snapshotFrameRef = useRef<number>();
 
   useEffect(() => {
+    applyThemeTokens(theme);
     document.body.classList.toggle("theme-light", theme === "light");
     document.body.classList.toggle("theme-dark", theme === "dark");
     window.localStorage.setItem(themeStorageKey, theme);

@@ -1,6 +1,6 @@
 import { ConnectionStatus } from "../types";
-
-type ThemeMode = "dark" | "light";
+import { ThemeMode } from "../theme";
+import pulsoLogo from "../assets/images/pulso-logo.png";
 
 type Props = {
   connectionStatus: ConnectionStatus;
@@ -23,21 +23,11 @@ export function AppHeader({
     <header className="app-header">
       <div className="brand-block">
         <div className="brand-row">
-          <svg
+          <img
             className="brand-mark"
-            viewBox="0 0 32 32"
-            role="img"
-            aria-label="Pulso heart pulse logo"
-          >
-            <path
-              d="M16 27s-9.5-5.8-12.2-12.1C1.8 10.1 4.8 5.5 9.3 5.5c2.6 0 4.4 1.4 5.4 3.1C15.1 9.3 15.5 10 16 10s.9-.7 1.3-1.4c1-1.7 2.8-3.1 5.4-3.1 4.5 0 7.5 4.6 5.5 9.4C25.5 21.2 16 27 16 27Z"
-              className="brand-heart"
-            />
-            <path
-              d="M5 16h5l2-4 3.2 8 2.8-6h3.2l1.6-3 2.2 5h2"
-              className="brand-pulse"
-            />
-          </svg>
+            src={pulsoLogo}
+            alt="Pulso logo"
+          />
           <h1>Pulso</h1>
         </div>
       </div>

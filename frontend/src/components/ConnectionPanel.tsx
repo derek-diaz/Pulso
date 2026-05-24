@@ -102,6 +102,16 @@ export function ConnectionPanel({ status, onConnect, onDisconnect, embedded = fa
         </div>
       ) : null}
       <form onSubmit={submit} className="stack">
+        <div className="connection-warning" role="note">
+          <WarningIcon />
+          <div>
+            <strong>Use extreme caution</strong>
+            <span>
+              Once connected, Pulso allows writes to the PLC. Verify the target controller,
+              tag, and machine state before writing any value.
+            </span>
+          </div>
+        </div>
         <HistoryInput
           label="PLC IP Address"
           value={config.address}
@@ -181,4 +191,12 @@ function errorMessage(value: unknown): string {
     return value;
   }
   return "Connection failed.";
+}
+
+function WarningIcon() {
+  return (
+    <svg className="connection-warning-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M10 2.6 18 17H2L10 2.6Zm0 3.4-5.4 9.7h10.8L10 6Zm-.7 2.7h1.4v4.2H9.3V8.7Zm0 5.2h1.4v1.4H9.3v-1.4Z" />
+    </svg>
+  );
 }

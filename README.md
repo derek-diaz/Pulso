@@ -1,82 +1,83 @@
 <p align="center">
-  <img src="docs/pulso-logo.svg" alt="Pulso heart pulse logo" width="128" height="128">
+  <img src="assets/web/icon-512.png" alt="Pulso logo" width="128" height="128">
 </p>
 
 <h1 align="center">Pulso</h1>
 
 <p align="center">
-  Local-first desktop tooling for debugging Allen-Bradley PLC state.
+  A local-first PLC state debugger for Allen-Bradley telemetry investigation.
 </p>
 
-Pulso is a specialized desktop utility for developers, controls engineers, and robotics teams who need to inspect what an Allen-Bradley PLC knows, what changed, what failed, and what a write actually did.
+<p align="center">
+  <strong>Debug tags. Inspect changes. Verify writes. Stay close to the controller.</strong>
+</p>
 
-Pulso is **not** SCADA, an HMI, or an operator dashboard. It is intended for local debugging and commissioning workflows.
+<p align="center">
+  <img src="assets/pulso.gif" alt="Pulso being used to inspect PLC telemetry" width="900">
+</p>
 
-## Features
+Pulso is a desktop tool for developers, controls engineers, robotics teams, and commissioning workflows where you need to understand what an Allen-Bradley PLC is doing right now.
 
-- Connect to Allen-Bradley PLCs over EtherNet/IP through `libplctag`
-- Add watched tags manually
-- Poll watched tags and isolate read failures per tag
-- Highlight recent value changes
+It is built for local debugging: watch tags, isolate read failures, inspect recent samples, discover controller tags, and write values with readback verification. It is not a SCADA system, HMI, cloud dashboard, or operator runtime.
+
+## Download Pulso
+
+If you just want to use Pulso, download the latest installer from the [GitHub Releases page](https://github.com/derek-diaz/Pulso/releases).
+
+Development setup is only needed if you want to build Pulso from source, modify the app, or work on the PLC emulator.
+
+## ⚠️ Read Before Connecting to a PLC
+
+> [!WARNING]
+> ⚠️ Pulso can write values to a real PLC. Exercise extreme caution when connecting to production equipment or any controller attached to physical machinery.
+>
+> 🛑 Before writing values, verify the controller address, tag name, data type, current machine state, and expected effect of the write. Pulso is a debugging and integration tool, not a safety system or operator interface.
+
+## Why Pulso Exists
+
+Pulso started from a practical frustration: Allen-Bradley integration work is still heavily tied to Windows tooling. If you are developing on Linux, even basic PLC state inspection can push you into a Windows VM just to run Studio 5000 and see what the controller is doing.
+
+Pulso is the tool I wanted for that workflow. It gives Linux-first and cross-platform engineering teams a focused way to inspect Allen-Bradley PLC data during integration without opening Studio 5000 for every tag check.
+
+Industrial debugging often happens in the gap between source code, controller state, and the real machine. Pulso gives that work a local desktop surface:
+
+- Watch live PLC tags over EtherNet/IP
+- See current and previous values, deltas, activity, stale reads, and errors
+- Inspect individual tags with recent samples and write history
 - Write values with pre-read, write, and readback verification
-- Inspect tag details, last read timing, read errors, and write results
-- Use a local event console for connection, polling, read, write, and backend events
+- Discover readable controller tags and UDT members
+- Import and export watch lists as JSON or CSV
 
-## Stack
+## Local Development
 
-- Wails v2
-- Go backend
-- React + Vite + TypeScript frontend
-- `github.com/libplctag/goplctag` integration behind the `libplctag` build tag
-- `libplctag` native library for real PLC communication
-
-## Development
-
-### One-Time Local Setup
-
-Run the setup script for your OS once. It installs or verifies the local development toolchain, installs the Wails CLI, installs frontend dependencies, and stages `libplctag` for PLC-enabled development under `.deps`.
+Clone the repo, run the setup script for your OS, then start the PLC-enabled dev app.
 
 Windows:
 
 ```powershell
 .\scripts\setup-dev-windows.ps1
+.\scripts\dev-plc.ps1
 ```
 
 Linux:
 
 ```bash
 bash scripts/setup-dev-linux.sh
+bash scripts/dev-plc.sh
 ```
 
 macOS:
 
 ```bash
 bash scripts/setup-dev-macos.sh
-```
-
-After setup, run the PLC-enabled development app with:
-
-Windows:
-
-```powershell
-.\scripts\dev-plc.ps1
-```
-
-Linux/macOS:
-
-```bash
 bash scripts/dev-plc.sh
 ```
 
-The setup scripts install Wails into the project-local `.deps/go-bin` directory. The development runners add that directory to `PATH` automatically.
+The setup scripts install or verify the local development toolchain, install frontend dependencies, install the Wails CLI, and stage `libplctag` under `.deps` when needed.
 
-The Windows setup uses `winget` for Go, Node.js, and MSYS2, then uses MSYS2 packages for the C toolchain, CMake, Ninja, and `pkg-config`. It also adds the expected tool directories to the user `PATH`; open a new terminal after the first setup if your current shell does not pick up those changes.
+## Offline PLC Emulator
 
-The Linux setup supports `apt`, `dnf`, and `pacman`. The macOS setup uses Homebrew and requires Xcode Command Line Tools.
-
-### Offline PLC Emulator
-
-Pulso includes an external ControlLogix-style emulator for working away from real PLC hardware. It runs as a separate TCP service and Pulso connects through the existing `libplctag` path, so reads, writes, tag discovery, and UDT member discovery exercise the same app code used against a PLC.
+Pulso includes an external ControlLogix-style emulator so you can develop and test without real PLC hardware. It runs as a TCP service, and Pulso connects through the same `libplctag` path used for real controllers.
 
 Start the sample emulator:
 
@@ -95,7 +96,7 @@ Address: 127.0.0.1
 Path:    1,0
 ```
 
-The default profile is `emulator/profiles/sample-logix.json`. Create another JSON profile with `tags` and `udts`, then pass it to the runner:
+The default profile is `emulator/profiles/sample-logix.json`. You can create another JSON profile with `tags` and `udts`, then pass it to the runner:
 
 ```powershell
 .\scripts\run-plc-emulator.ps1 -Profile .\emulator\profiles\my-line.json
@@ -105,216 +106,75 @@ The default profile is `emulator/profiles/sample-logix.json`. Create another JSO
 bash scripts/run-plc-emulator.sh 127.0.0.1:44818 emulator/profiles/my-line.json
 ```
 
-### Manual Prerequisites
-
-- Go 1.23+
-- Node.js and npm
-- Wails CLI v2
-- Platform WebView dependencies required by Wails
-
-On Ubuntu 24.04, Wails needs the `webkit2_41` tag because the distro provides `libwebkit2gtk-4.1-dev` instead of `libwebkit2gtk-4.0-dev`.
-
-Install frontend dependencies once:
-
-```bash
-cd frontend
-npm install
-```
-
-### Run Without PLC Support
-
-This mode boots the desktop app without requiring native `libplctag`. Connection attempts clearly report that PLC support is not enabled.
-
-```bash
-wails dev -tags webkit2_41
-```
-
-### Run With Real PLC Support
-
-Real PLC communication uses the official Go wrapper, `github.com/libplctag/goplctag`, which is a cgo wrapper around the native `libplctag` C library.
-
-On Windows, `scripts/setup-dev-windows.ps1` installs/builds the expected local `libplctag` distribution automatically. If you want to provide your own, point Pulso at its root:
-
-```text
-C:\path\to\libplctag\lib\pkgconfig\libplctag.pc
-C:\path\to\libplctag\bin\libplctag.dll
-```
-
-Then run the PLC-enabled desktop app:
-
-```powershell
-$env:LIBPLCTAG_ROOT = "C:\path\to\libplctag"
-.\scripts\dev-plc.ps1
-```
-
-If you stage the dependency under `.deps\libplctag-windows-amd64`, the script can be run without `LIBPLCTAG_ROOT`.
-
-The script sets `CGO_ENABLED`, `PKG_CONFIG_PATH`, and `PATH` for the current Wails dev process, then runs `wails dev -tags libplctag`.
-
-The PLC helper scripts automatically download, build, and install `libplctag` into `.deps/libplctag-install` the first time they need it:
-
-```bash
-bash scripts/dev-plc.sh
-```
-
-You can also prepare it explicitly:
-
-```bash
-bash scripts/setup-libplctag.sh
-```
-
-The setup script installs the pinned `libplctag` release under the project-local `.deps` directory and expects this file after installation:
-
-```text
-.deps/libplctag-install/lib/pkgconfig/libplctag.pc
-```
-
-Override the default pinned version when needed:
-
-```bash
-LIBPLCTAG_VERSION=2.6.16 bash scripts/setup-libplctag.sh
-```
-
-The helper scripts set `PKG_CONFIG_PATH`, `LD_LIBRARY_PATH`, and a project-local Go build cache. Set `PULSO_LIBPLCTAG_AUTO_SETUP=0` to require a pre-existing local libplctag install instead of bootstrapping it.
-
-### Checks
-
-Run frontend checks:
-
-```bash
-cd frontend
-npm run build
-```
-
-Run backend checks without PLC support:
-
-```bash
-GOCACHE="$PWD/.deps/go-build" go test . ./backend/...
-```
-
-Run backend checks with PLC support:
-
-```bash
-source scripts/plc-env.sh
-go test -tags libplctag . ./backend/...
-```
-
-## Building
+## Build From Source
 
 Build artifacts are written under `build/bin`.
 
-### Docker Builds
-
-The repeatable build path is containerized for the installers that can be produced from Linux:
+Containerized PLC builds:
 
 ```bash
 ./scripts/docker-build-plc.sh linux-deb
 ./scripts/docker-build-plc.sh windows-amd64
-```
-
-Build both:
-
-```bash
 ./scripts/docker-build-plc.sh all
 ```
 
-The Linux container builds a PLC-enabled Debian package with `libplctag.so*` bundled under `/opt/Pulso/lib`.
-The Windows container cross-builds a PLC-enabled amd64 NSIS installer and bundles the matching `libplctag.dll` beside `Pulso.exe`.
-
-macOS builds still need to run on macOS because Wails does not support producing normal macOS app bundles from Linux. Use a macOS CI runner or Mac build machine for the `.app` bundle, library path adjustment, signing, and notarization.
-
-### Linux
-
-Build the PLC-enabled Linux executable:
+Linux PLC executable:
 
 ```bash
 ./scripts/build-plc.sh
 ```
 
-Build a PLC-enabled Debian package:
+Linux Debian package:
 
 ```bash
 ./scripts/package-linux-plc-deb.sh
 ```
 
-The PLC executable embeds an `$ORIGIN/lib` runtime search path and copies `libplctag.so*` into `build/bin/lib`. The Debian package installs the same layout under `/opt/Pulso`, so users do not need to install `libplctag` system-wide.
-
-```text
-build/bin/Pulso
-build/bin/lib/
-build/bin/pulso_0.1.0_amd64.deb
-```
-
-Verify the bundled library is being used:
-
-```bash
-ldd build/bin/Pulso | grep libplctag
-readelf -d build/bin/Pulso | grep RUNPATH
-```
-
-Expected result: `libplctag` resolves from `build/bin/lib`, and the binary has `RUNPATH [$ORIGIN/lib]`.
-
-### Windows
-
-Build a PLC-enabled NSIS installer from Linux Docker:
-
-```bash
-./scripts/docker-build-plc.sh windows-amd64
-```
-
-Build a PLC-enabled NSIS installer from Windows:
+Windows PLC installer from Windows:
 
 ```powershell
 .\scripts\build-windows-plc.ps1 -Arch amd64 -LibPlcTagRoot C:\path\to\libplctag
 ```
 
-`LibPlcTagRoot` must contain both the build metadata and runtime DLL:
-
-```text
-C:\path\to\libplctag\lib\pkgconfig\libplctag.pc
-C:\path\to\libplctag\bin\libplctag.dll
-```
-
-The script builds with the `libplctag` tag and copies the runtime DLL into the NSIS installer resources. The installer template places that DLL next to `Pulso.exe`, so users do not need to install PLC software or add anything to `PATH`.
-
-Run the script with `-Arch arm64` when building an ARM64 installer and provide an ARM64 `libplctag` root.
-
-### macOS
-
-Build without PLC support from macOS:
+macOS app bundle:
 
 ```bash
 wails build -platform darwin/universal
 ```
 
-Architecture-specific examples:
-
-```bash
-wails build -platform darwin/arm64
-wails build -platform darwin/amd64
-```
-
-For a PLC-enabled macOS build, build or install `libplctag` for the target architecture, make `pkg-config` able to find `libplctag.pc`, and build with the `libplctag` tag:
+For a PLC-enabled macOS build, provide a target-architecture `libplctag` install, make `pkg-config` able to find `libplctag.pc`, and build with:
 
 ```bash
 wails build -platform darwin/universal -tags libplctag
 ```
 
-The `.app` bundle must include the `libplctag` dynamic library and have its library paths adjusted so the executable can load it from inside the app bundle. macOS PLC packaging still needs a target-mac build step to bundle and codesign that library.
+## Contributing
 
-### Cross-Platform Notes
+Pulso is early-stage but intended to be useful in real engineering workflows. Good contributions are usually small and practical:
 
-Wails can compile for multiple platforms with `-platform`, but native packaging is most reliable on the target OS because each platform has different WebView, signing, installer, and cgo requirements.
+- PLC read/write correctness
+- Emulator fidelity
+- Watch-list import/export behavior
+- Tag discovery and UDT handling
+- UI clarity for debugging dense telemetry
+- Packaging and installer reliability
+- Documentation that helps another engineer reproduce a workflow
 
-The Linux PLC build is currently the most complete packaged path for `libplctag`: users do not need a system-wide `libplctag` install if `build/bin/lib` is shipped with the app. Windows and macOS still need packaging work to bundle their native `libplctag` libraries automatically.
+Before opening a larger change, start with an issue or discussion so the scope stays aligned with the project.
 
-## Current v0.1 Scope
+## Safety Checklist
 
-- Connect/disconnect skeleton and status events
-- Manual watched tag add/remove
-- Live polling loop with per-tag read error isolation
-- Change detection and visible highlights
-- Safe write flow with pre-read, write, readback verification, and structured result events
-- Event console for connection, polling, read, write, and backend events
+Pulso can write values to a PLC when PLC support is enabled. Treat every write as an intentional control action:
 
-Automatic tag discovery, profiles, charts, time-series storage, OPC UA, MQTT, and cloud features are intentionally out of scope for v0.1.
+- Do not use it as an operator interface
+- Do not use it as a safety system
+- Do not write to production equipment unless you understand the consequence
+- Verify the target controller, tag name, data type, and intended value before writing
+- Confirm the machine or process is in a safe state before writing
+- Prefer the emulator or a test controller for development
+
+## License
+
+Pulso is released under the MIT License. See [LICENSE](LICENSE).
+
+Made in Puerto Rico. 🇵🇷

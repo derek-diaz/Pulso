@@ -47,7 +47,7 @@ Version: ${version}
 Section: devel
 Priority: optional
 Architecture: ${deb_arch}
-Maintainer: Derek Diaz <derek.diaz@plusonerobotics.com>
+Maintainer: Derek Diaz <derek.diaz@proton.me>
 Depends: libc6, libgtk-3-0, libwebkit2gtk-4.1-0
 Installed-Size: ${installed_size}
 Description: Local PLC state debugger

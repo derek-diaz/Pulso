@@ -45,7 +45,7 @@ export function InlineTrend({ dataType, samples, selected = false, size = "table
     return <span className="trend-empty-inline">warming</span>;
   }
 
-  return <Sparkline points={points} selected={selected} size={size} />;
+  return <Sparkline dataType={dataType} points={points} selected={selected} size={size} />;
 }
 
 export function SampleSummary({ dataType, samples }: Props) {
@@ -88,10 +88,12 @@ export function SampleSummary({ dataType, samples }: Props) {
 }
 
 function Sparkline({
+  dataType,
   points,
   selected,
   size,
 }: {
+  dataType: TagDataType;
   points: Array<{ timestamp: string; value: number }>;
   selected: boolean;
   size: "table" | "inspector";
@@ -103,13 +105,18 @@ function Sparkline({
   const maxValue = Math.max(...points.map((point) => point.value));
   const valueRange = Math.max(maxValue - minValue, 1);
   const maxIndex = Math.max(points.length - 1, 1);
-  const path = points
-    .map((point, index) => {
-      const x = padding + (index / maxIndex) * (width - padding * 2);
-      const y = height - padding - ((point.value - minValue) / valueRange) * (height - padding * 2);
-      return `${index === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(" ");
+  const plottedPoints = points.map((point, index) => {
+    const x = padding + (index / maxIndex) * (width - padding * 2);
+    const y = height - padding - ((point.value - minValue) / valueRange) * (height - padding * 2);
+    return {
+      x: Math.round(x * 2) / 2,
+      y: Math.round(y * 2) / 2,
+      value: point.value,
+    };
+  });
+  const path = shouldUseStepPath(points, dataType)
+    ? stepPath(plottedPoints)
+    : linePath(plottedPoints);
 
   return (
     <svg
@@ -121,6 +128,33 @@ function Sparkline({
       <path d={path} />
     </svg>
   );
+}
+
+function linePath(points: Array<{ x: number; y: number }>) {
+  return points
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+    .join(" ");
+}
+
+function stepPath(points: Array<{ x: number; y: number }>) {
+  return points
+    .map((point, index, allPoints) => {
+      if (index === 0) {
+        return `M ${point.x} ${point.y}`;
+      }
+      const previous = allPoints[index - 1];
+      const midX = Math.round(((previous.x + point.x) / 2) * 2) / 2;
+      return `L ${midX} ${previous.y} L ${midX} ${point.y} L ${point.x} ${point.y}`;
+    })
+    .join(" ");
+}
+
+function shouldUseStepPath(points: Array<{ value: number }>, dataType: TagDataType) {
+  if (dataType !== "REAL") {
+    return true;
+  }
+  const uniqueValues = new Set(points.map((point) => point.value)).size;
+  return uniqueValues <= Math.ceil(points.length * 0.55);
 }
 
 function formatTrendNumber(value: number): string {

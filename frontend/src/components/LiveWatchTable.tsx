@@ -296,7 +296,13 @@ export function LiveWatchTable({
                       />
                     </td>
                     <td>
-                      <span className={`activity-chip activity-${row.activity.tone}`}>
+                      <span
+                        className={[
+                          "activity-chip",
+                          `activity-${row.activity.tone}`,
+                          `activity-${row.activity.label.toLowerCase()}`,
+                        ].join(" ")}
+                      >
                         {row.activity.label}
                       </span>
                     </td>

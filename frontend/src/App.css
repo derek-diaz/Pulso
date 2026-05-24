@@ -15,12 +15,52 @@
   --red: #f43f5e;
   --amber: #f59e0b;
   --blue: #60a5fa;
+  --control-bg: #0b1120;
+  --header-bg: #0b0f16;
+  --toolbar-bg: #0d1320;
+  --table-head-bg: #0b1120;
+  --table-row-border: rgba(30, 41, 59, 0.82);
+  --console-bg: #080d15;
+  --hover-bg: rgba(148, 163, 184, 0.08);
+  --row-hover-bg: rgba(148, 163, 184, 0.055);
+  --modal-backdrop: rgba(3, 7, 18, 0.72);
+  --scrollbar-track: #070b12;
+  --scrollbar-thumb: #334155;
   --mono: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
   --sans: Inter, Aptos, "Segoe UI", system-ui, sans-serif;
   color: var(--text);
   font-family: var(--sans);
   font-synthesis: none;
   text-rendering: geometricPrecision;
+}
+
+.theme-light {
+  --bg: #eef2f7;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #e8edf5;
+  --border: #d7dee8;
+  --border-strong: #b8c3d1;
+  --text: #1f2937;
+  --text-strong: #0f172a;
+  --muted: #5f6f83;
+  --faint: #8491a3;
+  --accent-muted: rgba(249, 115, 22, 0.13);
+  --green: #15803d;
+  --red: #dc2626;
+  --amber: #b45309;
+  --blue: #2563eb;
+  --control-bg: #f8fafc;
+  --header-bg: #ffffff;
+  --toolbar-bg: #f8fafc;
+  --table-head-bg: #f1f5f9;
+  --table-row-border: rgba(203, 213, 225, 0.9);
+  --console-bg: #f8fafc;
+  --hover-bg: rgba(15, 23, 42, 0.055);
+  --row-hover-bg: rgba(15, 23, 42, 0.04);
+  --modal-backdrop: rgba(15, 23, 42, 0.36);
+  --scrollbar-track: #e2e8f0;
+  --scrollbar-thumb: #94a3b8;
 }
 
 * {
@@ -68,8 +108,8 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: #1d283a;
-  border-color: #475569;
+  background: var(--hover-bg);
+  border-color: var(--border-strong);
   color: var(--text-strong);
 }
 
@@ -116,7 +156,7 @@ button.danger:hover:not(:disabled) {
 
 input,
 select {
-  background: #0b1120;
+  background: var(--control-bg);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text);
@@ -170,7 +210,7 @@ code,
 
 .app-header {
   align-items: center;
-  background: #0b0f16;
+  background: var(--header-bg);
   border-bottom: 1px solid var(--border);
   display: grid;
   grid-template-columns: minmax(160px, 260px) minmax(0, 1fr);
@@ -239,7 +279,7 @@ h1 {
 }
 
 .connection-chip:hover:not(:disabled) {
-  background: #111827;
+  background: var(--hover-bg);
   border-color: transparent;
 }
 
@@ -309,7 +349,7 @@ h1 {
 }
 
 .left-sidebar {
-  background: #0b0f16;
+  background: var(--header-bg);
   border-right: 1px solid var(--border);
   display: grid;
   gap: 11px;
@@ -336,8 +376,8 @@ h1 {
 }
 
 .sidebar-collapse-toggle {
-  background: rgba(148, 163, 184, 0.06);
-  border: 1px solid rgba(51, 65, 85, 0.7);
+  background: var(--hover-bg);
+  border: 1px solid var(--border);
   color: var(--muted);
   gap: 6px;
   margin-left: auto;
@@ -351,7 +391,7 @@ h1 {
 }
 
 .sidebar-collapse-toggle:hover:not(:disabled) {
-  background: rgba(148, 163, 184, 0.12);
+  background: var(--surface-3);
   color: var(--text-strong);
 }
 
@@ -446,7 +486,7 @@ h1 {
 }
 
 .sidebar-connection:hover:not(:disabled) {
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--hover-bg);
 }
 
 .sidebar-connection span {
@@ -525,7 +565,7 @@ h1 {
 }
 
 .scope-row.is-selected {
-  background: rgba(148, 163, 184, 0.09);
+  background: var(--hover-bg);
   box-shadow: inset 2px 0 0 var(--accent);
   color: var(--text-strong);
 }
@@ -534,7 +574,7 @@ h1 {
 .pinned-row:hover:not(:disabled),
 .pinned-row.is-selected,
 .tool-link:hover:not(:disabled) {
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--hover-bg);
   color: var(--text-strong);
 }
 
@@ -632,7 +672,7 @@ h1 {
 
 .rail-button:hover:not(:disabled),
 .rail-button.is-selected {
-  background: rgba(148, 163, 184, 0.1);
+  background: var(--hover-bg);
   color: var(--text-strong);
 }
 
@@ -641,7 +681,7 @@ h1 {
 }
 
 .rail-button::after {
-  background: #111827;
+  background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: 4px;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
@@ -724,7 +764,7 @@ h1 {
 .table-toolbar,
 .console-toolbar {
   align-items: center;
-  background: #0d1320;
+  background: var(--toolbar-bg);
   border-bottom: 1px solid var(--border);
   display: flex;
   gap: 12px;
@@ -776,7 +816,7 @@ table {
 }
 
 th {
-  background: #0b1120;
+  background: var(--table-head-bg);
   border-bottom: 1px solid var(--border);
   color: var(--muted);
   font-size: 11px;
@@ -806,13 +846,13 @@ th button:hover:not(:disabled) {
 
 th,
 td {
-  border-bottom: 1px solid rgba(30, 41, 59, 0.82);
+  border-bottom: 1px solid var(--table-row-border);
   padding: 5px 8px;
   vertical-align: middle;
 }
 
 td {
-  color: #cbd5e1;
+  color: var(--text);
   height: 32px;
 }
 
@@ -853,7 +893,7 @@ tbody tr {
 }
 
 tbody tr:hover {
-  background: rgba(148, 163, 184, 0.055);
+  background: var(--row-hover-bg);
 }
 
 .selected-row {
@@ -1099,7 +1139,7 @@ td code {
 }
 
 .filter-tabs button.is-active {
-  background: rgba(148, 163, 184, 0.1);
+  background: var(--hover-bg);
   color: var(--text);
 }
 
@@ -1136,12 +1176,12 @@ td code {
 }
 
 .trend-window-control button + button {
-  border-left: 1px solid rgba(30, 41, 59, 0.85);
+  border-left: 1px solid var(--border);
 }
 
 .trend-window-control button:hover:not(:disabled),
 .trend-window-control button.is-active {
-  background: rgba(148, 163, 184, 0.1);
+  background: var(--hover-bg);
   color: var(--text-strong);
 }
 
@@ -1192,7 +1232,7 @@ td code {
 
 .pin-button:hover:not(:disabled),
 .pin-button.is-pinned {
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--hover-bg);
   color: var(--accent);
 }
 
@@ -1359,7 +1399,7 @@ tbody tr:focus-within .inline-copy {
 }
 
 .recent-values code {
-  background: #0b1120;
+  background: var(--control-bg);
   border: 1px solid var(--border);
   border-radius: 3px;
   color: var(--text);
@@ -1459,7 +1499,7 @@ tbody tr:focus-within .inline-copy {
 }
 
 .console-log {
-  background: #080d15;
+  background: var(--console-bg);
   font-family: var(--mono);
   font-size: 11px;
   min-height: 0;
@@ -1673,7 +1713,7 @@ tbody tr:focus-within .inline-copy {
 
 .modal-backdrop {
   align-items: center;
-  background: rgba(3, 7, 18, 0.72);
+  background: var(--modal-backdrop);
   display: flex;
   inset: 0;
   justify-content: center;
@@ -1798,7 +1838,7 @@ tbody tr:focus-within .inline-copy {
 
 .drop-zone {
   align-items: center;
-  background: #0b1120;
+  background: var(--control-bg);
   border: 1px dashed var(--border-strong);
   border-radius: 4px;
   display: grid;
@@ -1945,7 +1985,7 @@ tbody tr:focus-within .inline-copy {
 }
 
 .discovery-progress-track {
-  background: #020617;
+  background: var(--surface-3);
   border: 1px solid var(--border);
   border-radius: 999px;
   height: 8px;
@@ -1964,12 +2004,12 @@ tbody tr:focus-within .inline-copy {
 }
 
 ::-webkit-scrollbar-track {
-  background: #070b12;
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
-  border: 2px solid #070b12;
+  background: var(--scrollbar-thumb);
+  border: 2px solid var(--scrollbar-track);
   border-radius: 999px;
 }
 

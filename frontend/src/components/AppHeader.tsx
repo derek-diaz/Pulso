@@ -7,7 +7,6 @@ type Props = {
   theme: ThemeMode;
   onConnectionSettings: () => void;
   onToggleTheme: () => void;
-  onSavedSessions: () => void;
 };
 
 export function AppHeader({
@@ -15,7 +14,6 @@ export function AppHeader({
   theme,
   onConnectionSettings,
   onToggleTheme,
-  onSavedSessions,
 }: Props) {
   const connectionConfig = connectionStatus.config;
 
@@ -55,9 +53,6 @@ export function AppHeader({
           onClick={onToggleTheme}
         >
           {theme === "light" ? <MoonIcon /> : <SunIcon />}
-        </button>
-        <button className="header-tool" type="button" onClick={onSavedSessions}>
-          Saved Sessions
         </button>
       </div>
     </header>

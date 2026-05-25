@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"reflect"
 	"strings"
@@ -481,12 +482,56 @@ func (a *App) emitSnapshot(result watch.SnapshotResult, err error) {
 	if err != nil {
 		a.emit("tag:error", result.Snapshot)
 		a.emitAppEvent("ERROR", "read", fmt.Sprintf("Timeout or error reading %s: %s", result.Snapshot.Name, err.Error()), result.Snapshot)
+		a.handlePossibleConnectionLoss(err)
 		return
 	}
 	a.emit("tag:snapshot", result.Snapshot)
 	if result.Changed {
 		a.emit("tag:changed", result.Snapshot)
 	}
+}
+
+func (a *App) handlePossibleConnectionLoss(readErr error) {
+	if !a.status.Connected || a.status.Config == nil {
+		return
+	}
+	if plcEndpointReachable(*a.status.Config) {
+		return
+	}
+
+	config := a.status.Config
+	a.manager.Stop()
+	_ = a.client.Disconnect()
+	a.status = plc.ConnectionStatus{
+		State:         "Disconnected",
+		Connected:     false,
+		PollingActive: false,
+		Config:        config,
+		Error:         readErr.Error(),
+	}
+	a.emit("polling:status", false)
+	a.emit("connection:status", a.status)
+	a.emitAppEvent("WARN", "connection", fmt.Sprintf("Connection lost: %s", readErr.Error()), nil)
+}
+
+func plcEndpointReachable(config plc.ConnectionConfig) bool {
+	endpoint := config.Address
+	if !strings.Contains(endpoint, ":") {
+		endpoint += ":44818"
+	}
+	timeoutMs := config.TimeoutMs
+	if timeoutMs <= 0 {
+		timeoutMs = 5000
+	}
+	if timeoutMs > 1000 {
+		timeoutMs = 1000
+	}
+	conn, err := net.DialTimeout("tcp", endpoint, time.Duration(timeoutMs)*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
 }
 
 func (a *App) emitWriteResult(result plc.WriteResult) {

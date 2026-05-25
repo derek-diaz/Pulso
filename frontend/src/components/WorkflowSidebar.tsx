@@ -19,6 +19,7 @@ export type RailIconName =
   | "stale"
   | "written"
   | "pinned"
+  | "sessions"
   | "settings";
 
 export type ScopeOption = [InvestigationScope, string, number, RailIconName];
@@ -40,7 +41,6 @@ type Props = {
   onAddTag: () => void;
   onDiscoverTags: () => void;
   onSaveSession: () => void;
-  onClearHighlights: () => void;
   onConnectionSettings: () => void;
 };
 
@@ -61,7 +61,6 @@ export function WorkflowSidebar({
   onAddTag,
   onDiscoverTags,
   onSaveSession,
-  onClearHighlights,
   onConnectionSettings,
 }: Props) {
   const connectionConfig = connectionStatus.config;
@@ -131,6 +130,16 @@ export function WorkflowSidebar({
           ))}
           <div className="rail-separator" aria-hidden="true" />
           <button
+            className="rail-button"
+            type="button"
+            title="Import / Export"
+            aria-label="Import / Export"
+            data-tooltip="Import / Export"
+            onClick={onSaveSession}
+          >
+            <RailIcon name="sessions" />
+          </button>
+          <button
             className="rail-button rail-settings"
             type="button"
             title="Connection Settings"
@@ -158,7 +167,7 @@ export function WorkflowSidebar({
             </button>
           </section>
           <section className="sidebar-section">
-            <div className="sidebar-heading">Primary</div>
+            <div className="sidebar-heading">Tags</div>
             <div className="sidebar-actions primary-actions">
               <button
                 className="tool-link primary-action"
@@ -166,7 +175,8 @@ export function WorkflowSidebar({
                 disabled={!connectionStatus.connected}
                 onClick={onAddTag}
               >
-                + Add Tag
+                <RailIcon name="add" />
+                <span>Add Tag</span>
               </button>
               <button
                 className="tool-link"
@@ -174,7 +184,8 @@ export function WorkflowSidebar({
                 disabled={!connectionStatus.connected}
                 onClick={onDiscoverTags}
               >
-                Discover Tags
+                <RailIcon name="discover" />
+                <span>Discover Tags</span>
               </button>
             </div>
           </section>
@@ -227,16 +238,15 @@ export function WorkflowSidebar({
             </div>
           </section>
           <section className="sidebar-section secondary-section">
-            <div className="sidebar-heading">Secondary</div>
+            <div className="sidebar-heading">Settings</div>
             <div className="sidebar-actions secondary-actions">
               <button className="tool-link" type="button" onClick={onSaveSession}>
-                Save Session
-              </button>
-              <button className="tool-link" type="button" onClick={onClearHighlights}>
-                Clear Highlights
+                <RailIcon name="sessions" />
+                <span>Import / Export</span>
               </button>
               <button className="tool-link" type="button" onClick={onConnectionSettings}>
-                Connection Settings
+                <RailIcon name="settings" />
+                <span>Connection Settings</span>
               </button>
             </div>
           </section>
@@ -315,6 +325,13 @@ function RailIcon({ name }: { name: RailIconName }) {
       return (
         <svg viewBox="0 0 20 20" aria-hidden="true">
           <path d="m10 3 2.1 4.3 4.7.7-3.4 3.3.8 4.7-4.2-2.2L5.8 16l.8-4.7L3.2 8l4.7-.7L10 3Z" />
+        </svg>
+      );
+    case "sessions":
+      return (
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M5 4.5h10v11H5v-11Z" />
+          <path d="M7.5 7h5M7.5 10h5M7.5 13h3" />
         </svg>
       );
     case "settings":

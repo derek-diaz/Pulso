@@ -1,4 +1,4 @@
-import { formatValue } from "../format";
+import { formatTimestamp, formatValue } from "../format";
 import { countChanges, numericValue, sampleStats, TagHistorySample } from "../tagHistory";
 import { TagDataType } from "../types";
 
@@ -7,25 +7,19 @@ type Props = {
   samples: TagHistorySample[];
   selected?: boolean;
   size?: "table" | "inspector";
+  timeRange?: {
+    startMs: number;
+    endMs: number;
+  };
 };
 
-export function InlineTrend({ dataType, samples, selected = false, size = "table" }: Props) {
+export function InlineTrend({ dataType, samples, selected = false, size = "table", timeRange }: Props) {
   if (samples.length === 0) {
     return <span className="trend-empty-inline">no samples</span>;
   }
 
   if (dataType === "BOOL") {
-    return (
-      <div className={`bool-strip ${size}`} aria-label="Recent BOOL samples">
-        {samples.slice(-24).map((sample, index) => (
-          <span
-            key={`${sample.timestamp}-${index}`}
-            className={sample.value === true ? "is-true" : "is-false"}
-            title={`${formatValue(sample.value)} at ${sample.timestamp}`}
-          />
-        ))}
-      </div>
-    );
+    return <BoolTimeline samples={samples} selected={selected} size={size} timeRange={timeRange} />;
   }
 
   if (dataType === "STRING" || dataType === "STRUCT") {
@@ -45,7 +39,7 @@ export function InlineTrend({ dataType, samples, selected = false, size = "table
     return <span className="trend-empty-inline">warming</span>;
   }
 
-  return <Sparkline dataType={dataType} points={points} selected={selected} size={size} />;
+  return <Sparkline dataType={dataType} points={points} selected={selected} size={size} timeRange={timeRange} />;
 }
 
 export function SampleSummary({ dataType, samples }: Props) {
@@ -61,10 +55,17 @@ export function SampleSummary({ dataType, samples }: Props) {
   }
 
   if (dataType === "STRING" || dataType === "STRUCT") {
+    const transitions = stateTransitions(samples).slice(-4).reverse();
+    if (transitions.length === 0) {
+      return <div className="sample-summary">No samples yet</div>;
+    }
     return (
       <div className="recent-values">
-        {samples.slice(-4).map((sample, index) => (
-          <code key={`${sample.timestamp}-${index}`}>{formatValue(sample.value)}</code>
+        {transitions.map((sample, index) => (
+          <div className="recent-value-row" key={`${sample.timestamp}-${index}`}>
+            <span>{formatTimestamp(sample.timestamp)}</span>
+            <code title={formatValue(sample.value)}>{formatValue(sample.value)}</code>
+          </div>
         ))}
       </div>
     );
@@ -92,11 +93,13 @@ function Sparkline({
   points,
   selected,
   size,
+  timeRange,
 }: {
   dataType: TagDataType;
   points: Array<{ timestamp: string; value: number }>;
   selected: boolean;
   size: "table" | "inspector";
+  timeRange?: Props["timeRange"];
 }) {
   const width = size === "inspector" ? 260 : 86;
   const height = size === "inspector" ? 46 : 22;
@@ -104,9 +107,15 @@ function Sparkline({
   const minValue = Math.min(...points.map((point) => point.value));
   const maxValue = Math.max(...points.map((point) => point.value));
   const valueRange = Math.max(maxValue - minValue, 1);
+  const timeScale = buildTimeScale(
+    points.map((point) => point.timestamp),
+    timeRange,
+    padding,
+    width - padding
+  );
   const maxIndex = Math.max(points.length - 1, 1);
   const plottedPoints = points.map((point, index) => {
-    const x = padding + (index / maxIndex) * (width - padding * 2);
+    const x = timeScale(point.timestamp, index, maxIndex);
     const y = height - padding - ((point.value - minValue) / valueRange) * (height - padding * 2);
     return {
       x: Math.round(x * 2) / 2,
@@ -128,6 +137,129 @@ function Sparkline({
       <path d={path} />
     </svg>
   );
+}
+
+function BoolTimeline({
+  samples,
+  selected,
+  size,
+  timeRange,
+}: {
+  samples: TagHistorySample[];
+  selected: boolean;
+  size: "table" | "inspector";
+  timeRange?: Props["timeRange"];
+}) {
+  const bucketCount = 24;
+  const buckets = bucketBoolSamples(samples, bucketCount, timeRange);
+
+  return (
+    <div
+      className={`bool-strip ${selected ? "is-selected" : ""} ${size}`}
+      role="img"
+      aria-label="Recent BOOL samples"
+    >
+      {buckets.map((bucket, index) => (
+        <span
+          key={`${bucket.timestamp ?? "empty"}-${index}`}
+          className={bucket.value === true ? "is-true" : bucket.value === false ? "is-false" : "is-empty"}
+          title={
+            bucket.timestamp
+              ? `${formatValue(bucket.value)} at ${bucket.timestamp}`
+              : "No sample in this time slice"
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+function bucketBoolSamples(
+  samples: TagHistorySample[],
+  bucketCount: number,
+  timeRange: Props["timeRange"]
+) {
+  const parsedSamples = samples
+    .map((sample) => ({ ...sample, timeMs: Date.parse(sample.timestamp) }))
+    .filter((sample) => Number.isFinite(sample.timeMs))
+    .sort((left, right) => left.timeMs - right.timeMs);
+  const finiteTimes = parsedSamples.map((sample) => sample.timeMs);
+  const startMs = timeRange?.startMs ?? Math.min(...finiteTimes);
+  const endMs = timeRange?.endMs ?? Math.max(...finiteTimes);
+  const timeSpan = endMs - startMs;
+
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || timeSpan <= 0) {
+    return samples.slice(-bucketCount).map((sample) => ({
+      value: sample.value,
+      timestamp: sample.timestamp,
+    }));
+  }
+
+  const buckets: Array<{ value?: unknown; timestamp?: string }> = Array.from(
+    { length: bucketCount },
+    () => ({})
+  );
+  let sampleIndex = 0;
+  let latestSample: (typeof parsedSamples)[number] | undefined;
+
+  while (sampleIndex < parsedSamples.length && parsedSamples[sampleIndex].timeMs <= startMs) {
+    latestSample = parsedSamples[sampleIndex];
+    sampleIndex += 1;
+  }
+
+  for (let bucketIndex = 0; bucketIndex < bucketCount; bucketIndex += 1) {
+    const bucketEndMs = startMs + ((bucketIndex + 1) / bucketCount) * timeSpan;
+    while (sampleIndex < parsedSamples.length && parsedSamples[sampleIndex].timeMs <= bucketEndMs) {
+      latestSample = parsedSamples[sampleIndex];
+      sampleIndex += 1;
+    }
+    if (latestSample) {
+      buckets[bucketIndex] = {
+        value: latestSample.value,
+        timestamp: latestSample.timestamp,
+      };
+    }
+  }
+
+  return buckets;
+}
+
+function stateTransitions(samples: TagHistorySample[]): TagHistorySample[] {
+  const transitions: TagHistorySample[] = [];
+  samples.forEach((sample) => {
+    const previous = transitions[transitions.length - 1];
+    if (!previous || formatValue(previous.value) !== formatValue(sample.value)) {
+      transitions.push(sample);
+    }
+  });
+  return transitions;
+}
+
+function buildTimeScale(
+  timestamps: string[],
+  timeRange: Props["timeRange"],
+  minX: number,
+  maxX: number
+) {
+  const parsed = timestamps.map((timestamp) => Date.parse(timestamp));
+  const finiteTimes = parsed.filter(Number.isFinite);
+  const startMs = timeRange?.startMs ?? Math.min(...finiteTimes);
+  const endMs = timeRange?.endMs ?? Math.max(...finiteTimes);
+  const timeSpan = endMs - startMs;
+
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || timeSpan <= 0) {
+    return (_timestamp: string, index: number, maxIndex: number) =>
+      minX + (index / maxIndex) * (maxX - minX);
+  }
+
+  return (timestamp: string, index: number, maxIndex: number) => {
+    const parsedTimestamp = Date.parse(timestamp);
+    if (!Number.isFinite(parsedTimestamp)) {
+      return minX + (index / maxIndex) * (maxX - minX);
+    }
+    const ratio = Math.min(1, Math.max(0, (parsedTimestamp - startMs) / timeSpan));
+    return minX + ratio * (maxX - minX);
+  };
 }
 
 function linePath(points: Array<{ x: number; y: number }>) {

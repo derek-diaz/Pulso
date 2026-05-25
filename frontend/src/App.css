@@ -615,9 +615,30 @@ h1 {
 }
 
 .tool-link {
+  align-items: center;
   color: var(--muted);
+  display: flex;
   font-size: 12px;
+  gap: 8px;
   min-height: 26px;
+}
+
+.tool-link svg {
+  fill: none;
+  flex: 0 0 auto;
+  height: 15px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  width: 15px;
+}
+
+.tool-link span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tool-link.primary-action {
@@ -1095,6 +1116,11 @@ td code {
   background: var(--telemetry-boolean-false);
 }
 
+.bool-strip .is-empty {
+  background: var(--trend-inactive);
+  opacity: 0.34;
+}
+
 .trend-empty-inline,
 .change-count {
   color: var(--faint);
@@ -1466,13 +1492,31 @@ tbody tr:focus-within .inline-copy {
   gap: 4px;
 }
 
-.recent-values code {
+.recent-value-row {
+  align-items: center;
   background: var(--control-bg);
   border: 1px solid var(--border);
   border-radius: 3px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 76px minmax(0, 1fr);
+  min-height: 30px;
+  padding: 4px 6px;
+}
+
+.recent-value-row span {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.recent-values code {
+  background: transparent;
+  border: 0;
   color: var(--text);
   overflow: hidden;
-  padding: 4px 6px;
+  padding: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1932,14 +1976,43 @@ tbody tr:focus-within .inline-copy {
   border: 1px solid var(--border);
   border-radius: 4px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
   padding: 12px;
+}
+
+.watch-list-section-heading {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 28px minmax(0, 1fr);
+}
+
+.watch-list-section-heading > svg {
+  background: var(--surface-active);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 4px;
+  color: var(--accent);
+  fill: none;
+  height: 28px;
+  padding: 5px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  width: 28px;
 }
 
 .watch-list-section h2 {
   color: var(--text-strong);
   font-size: 13px;
   margin: 0;
+}
+
+.watch-list-section-heading p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 2px 0 0;
 }
 
 .drop-zone {
@@ -1957,6 +2030,7 @@ tbody tr:focus-within .inline-copy {
 
 .drop-zone.is-active {
   border-color: var(--accent);
+  background: var(--action-primary-muted);
 }
 
 .drop-zone-mark {
@@ -1965,15 +2039,39 @@ tbody tr:focus-within .inline-copy {
   border-radius: 4px;
   color: var(--muted);
   display: flex;
-  font-family: var(--mono);
   height: 30px;
   justify-content: center;
   width: 34px;
 }
 
+.drop-zone-mark svg {
+  fill: none;
+  height: 18px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  width: 18px;
+}
+
 .drop-zone strong {
   color: var(--text-strong);
   font-size: 13px;
+}
+
+.watch-list-format-row {
+  display: flex;
+  gap: 6px;
+}
+
+.watch-list-format-row span {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 6px;
 }
 
 .watch-list-count-card {
@@ -1995,6 +2093,28 @@ tbody tr:focus-within .inline-copy {
   color: var(--text-strong);
   font-family: var(--mono);
   font-size: 28px;
+}
+
+.export-format-button {
+  align-items: start;
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  min-height: 54px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.export-format-button strong {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.export-format-button span {
+  color: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.78;
 }
 
 .discovery-toolbar {
@@ -2138,28 +2258,6 @@ tbody tr:focus-within .inline-copy {
 }
 
 @media (max-width: 1180px) {
-  body {
-    overflow: auto;
-  }
-
-  .app-shell,
-  .app-shell.console-collapsed {
-    height: auto;
-    min-height: 100%;
-    grid-template-rows: 44px auto auto;
-  }
-
-  .app-body {
-    grid-template-columns: 1fr;
-  }
-
-  .left-sidebar {
-    border-bottom: 1px solid var(--border);
-    border-right: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .workspace,
   .workspace.has-inspector {
     grid-template-columns: 1fr;
   }
@@ -2194,7 +2292,6 @@ tbody tr:focus-within .inline-copy {
     display: none;
   }
 
-  .left-sidebar,
   .watch-list-grid,
   .split-fields,
   .button-row,

@@ -12,6 +12,7 @@ import {
   samplesForWindow,
   TagHistory,
   TrendWindow,
+  trendWindowMs,
   visibleRuntimeStatus,
 } from "../tagHistory";
 import { InlineTrend } from "./InlineTrend";
@@ -31,12 +32,6 @@ type Props = {
   onTogglePinned: (tagId: string) => void;
   connected: boolean;
   search: string;
-  summary: {
-    shown: number;
-    changing: number;
-    stale: number;
-    errors: number;
-  };
   pollingActive: boolean;
   onSearchChange: (value: string) => void;
   onTogglePolling: () => void;
@@ -74,7 +69,6 @@ export function LiveWatchTable({
   onTogglePinned,
   connected,
   search,
-  summary,
   pollingActive,
   onSearchChange,
   onTogglePolling,
@@ -85,6 +79,16 @@ export function LiveWatchTable({
 }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("priority");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const trendTimeRange = useMemo(() => {
+    const durationMs = trendWindowMs(trendWindow);
+    if (!Number.isFinite(durationMs)) {
+      return undefined;
+    }
+    return {
+      startMs: nowMs - durationMs,
+      endMs: nowMs,
+    };
+  }, [nowMs, trendWindow]);
   const rowModels = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return tags
@@ -106,6 +110,7 @@ export function LiveWatchTable({
           visibleStatus,
           activity,
           delta,
+          trendSamples: tag.dataType === "BOOL" ? allSamples : samples,
           changed: changedTagIds.has(tag.id),
         };
       })
@@ -143,9 +148,6 @@ export function LiveWatchTable({
         <div className="toolbar-left">
           <div className="table-title">
             <strong>Live Watch</strong>
-            <span>
-              {summary.shown} shown · {summary.changing} changing · {summary.stale} stale · {summary.errors} errors
-            </span>
           </div>
         </div>
         <div className="toolbar-right">
@@ -291,8 +293,9 @@ export function LiveWatchTable({
                     <td className="trend-cell">
                       <InlineTrend
                         dataType={row.tag.dataType}
-                        samples={row.samples}
+                        samples={row.trendSamples}
                         selected={selectedTagId === row.tag.id}
+                        timeRange={trendTimeRange}
                       />
                     </td>
                     <td>

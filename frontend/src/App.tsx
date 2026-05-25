@@ -44,6 +44,7 @@ const initialEvent: AppEvent = {
 const themeStorageKey = "pulso-theme";
 const sidebarCollapsedStorageKey = "pulso-sidebar-collapsed";
 const historySampleLimit = 1800;
+const chartRefreshMs = 250;
 
 function getInitialTheme(): ThemeMode {
   const savedTheme = window.localStorage.getItem(themeStorageKey);
@@ -101,7 +102,7 @@ function App() {
   }, [sidebarCollapsed]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    const timer = window.setInterval(() => setNowMs(Date.now()), chartRefreshMs);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -348,22 +349,6 @@ function App() {
     return { tag, snapshot, status, activity };
   });
   const searchNeedle = search.trim().toLowerCase();
-  const visibleRows = scopedRows
-    .filter((row) => scopeMatches(row, scope, pinnedTagIds))
-    .filter((row) => !searchNeedle || row.tag.name.toLowerCase().includes(searchNeedle));
-  const focusSummary = visibleRows.reduce(
-    (summary, tag) => {
-      return {
-        changing: summary.changing + (tag.activity.changes > 0 ? 1 : 0),
-        stale: summary.stale + (tag.status.label === "STALE" ? 1 : 0),
-        errors: summary.errors + (tag.status.label === "ERROR" ? 1 : 0),
-        written:
-          summary.written +
-          (tag.status.label === "WRITTEN" || tag.status.label === "OVERRIDDEN" ? 1 : 0),
-      };
-    },
-    { changing: 0, stale: 0, errors: 0, written: 0 }
-  );
   const scopeOptions: ScopeOption[] = [
     ["all", "All", state.watchedTags.length, "all"],
     ["changing", "Changing", scopedRows.filter((row) => row.activity.changes > 0).length, "changing"],
@@ -413,7 +398,6 @@ function App() {
         theme={theme}
         onConnectionSettings={() => setConnectionOpen(true)}
         onToggleTheme={() => setTheme((current) => (current === "light" ? "dark" : "light"))}
-        onSavedSessions={() => setWatchListOpen(true)}
       />
       <div className={`app-body ${sidebarCollapsed ? "sidebar-is-collapsed" : ""}`}>
         <WorkflowSidebar
@@ -433,7 +417,6 @@ function App() {
           onAddTag={() => setAddTagOpen(true)}
           onDiscoverTags={() => setDiscoverOpen(true)}
           onSaveSession={() => setWatchListOpen(true)}
-          onClearHighlights={() => setChangedTagIds(new Set())}
           onConnectionSettings={() => setConnectionOpen(true)}
         />
         <div className={`workspace ${selectedTag ? "has-inspector" : ""}`}>
@@ -452,12 +435,6 @@ function App() {
             onTogglePinned={togglePinned}
             connected={state.connectionStatus.connected}
             search={search}
-            summary={{
-              shown: visibleRows.length,
-              changing: focusSummary.changing,
-              stale: focusSummary.stale,
-              errors: focusSummary.errors,
-            }}
             pollingActive={state.pollingActive}
             onSearchChange={setSearch}
             onTogglePolling={togglePolling}

@@ -8,6 +8,7 @@ import {
   samplesForWindow,
   TagHistorySample,
   TrendWindow,
+  trendWindowMs,
 } from "../tagHistory";
 import { InlineTrend, SampleSummary } from "./InlineTrend";
 import { StatusBadge } from "./StatusBadge";
@@ -35,6 +36,16 @@ export function TagInspector({
   onClose,
 }: Props) {
   const [sampleWindow, setSampleWindow] = useState<TrendWindow>("30s");
+  const sampleTimeRange = useMemo(() => {
+    const durationMs = trendWindowMs(sampleWindow);
+    if (!Number.isFinite(durationMs)) {
+      return undefined;
+    }
+    return {
+      startMs: nowMs - durationMs,
+      endMs: nowMs,
+    };
+  }, [nowMs, sampleWindow]);
   const visibleHistory = useMemo(
     () => samplesForWindow(history, sampleWindow, nowMs),
     [history, nowMs, sampleWindow]
@@ -116,9 +127,10 @@ export function TagInspector({
         <InlineTrend
           key={`${tag.id}-${sampleWindow}`}
           dataType={tag.dataType}
-          samples={visibleHistory}
+          samples={tag.dataType === "BOOL" ? history : visibleHistory}
           selected
           size="inspector"
+          timeRange={sampleTimeRange}
         />
         <SampleSummary dataType={tag.dataType} samples={visibleHistory} size="inspector" />
       </section>

@@ -25,6 +25,8 @@ func main() {
 		Title:  "Pulso",
 		Width:  1440,
 		Height: 900,
+		MinWidth:  1180,
+		MinHeight: 720,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

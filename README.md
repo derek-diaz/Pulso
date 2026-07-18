@@ -175,6 +175,6 @@ Pulso can write values to a PLC when PLC support is enabled. Treat every write a
 
 ## License
 
-Pulso is released under the MIT License. See [LICENSE](LICENSE).
+Pulso is released under the Apache License 2.0. See [LICENSE](LICENSE).
 
 Made in Puerto Rico. 🇵🇷

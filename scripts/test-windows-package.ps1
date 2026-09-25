@@ -65,8 +65,16 @@ public static class PulsoPackageSmokeTest {
 '@
 }
 $PreviousPath = $env:PATH
+$PreviousAppData = $env:APPDATA
+$TempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+$TestDir = Join-Path $TempRoot ("Pulso-runtime-test-" + [Guid]::NewGuid().ToString('N'))
 $Process = $null
+$ProbeProcess = $null
 try {
+    # WebView2 can reuse a browser process for the same user-data folder. Keep
+    # this test independent of any Pulso instance and saved UI state on the PC.
+    $env:APPDATA = Join-Path $TestDir 'profile'
+    New-Item -ItemType Directory -Path $env:APPDATA -Force | Out-Null
     $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
     # Launch from a different directory to exercise executable-relative loading.
     $Process = Start-Process -FilePath $BinaryPath -WorkingDirectory $env:SystemRoot -WindowStyle Hidden -PassThru
@@ -86,9 +94,46 @@ try {
         throw "Bundled WebView2 did not start a renderer"
     }
     Write-Host "Pulso opened with its bundled WebView2 renderer and only Windows system directories on PATH."
+
+    # A shared runtime must not conceal missing browser files in a release.
+    # Use a copy with only Pulso and its native DLLs, leaving the installed
+    # package and the machine's shared WebView2 installation untouched.
+    $ProbeDir = Join-Path $TestDir 'without-browser'
+    New-Item -ItemType Directory -Path $ProbeDir | Out-Null
+    $ProbeBinary = Join-Path $ProbeDir (Split-Path -Leaf $BinaryPath)
+    Copy-Item -LiteralPath $BinaryPath -Destination $ProbeBinary
+    Get-ChildItem -LiteralPath $PackageDir -Filter '*.dll' -File | Copy-Item -Destination $ProbeDir
+    $ErrorLog = Join-Path $ProbeDir 'startup-error.txt'
+    $ProbeProcess = Start-Process -FilePath $ProbeBinary -WorkingDirectory $env:SystemRoot -WindowStyle Hidden -RedirectStandardError $ErrorLog -PassThru
+    if (!$ProbeProcess.WaitForExit(10000)) {
+        throw "Pulso kept running without its bundled browser; a shared runtime may be masking a broken package"
+    }
+    $ProbeProcess.WaitForExit() # Flush redirected stderr after process exit.
+    $StartupError = Get-Content -LiteralPath $ErrorLog -Raw
+    if (!$StartupError -or !$StartupError.Contains("Pulso's bundled browser files are missing or damaged.")) {
+        throw "Expected the bundled-browser error, got: $StartupError"
+    }
+    Write-Host "Pulso rejected the incomplete package without falling back to a shared WebView2 runtime."
 } finally {
     $env:PATH = $PreviousPath
-    if ($null -ne $Process -and !$Process.HasExited) {
-        Stop-Process -Id $Process.Id -Force
+    $env:APPDATA = $PreviousAppData
+    foreach ($OwnedProcess in @($Process, $ProbeProcess)) {
+        if ($null -ne $OwnedProcess -and !$OwnedProcess.HasExited) {
+            Stop-Process -Id $OwnedProcess.Id -Force
+            $OwnedProcess.WaitForExit()
+        }
     }
+    # Close only browsers using this test's unique profile, including any left
+    # behind by a failed assertion. Do not stop a user's existing Pulso browser.
+    Get-CimInstance Win32_Process -Filter "Name = 'msedgewebview2.exe'" |
+        Where-Object { $_.CommandLine -and $_.CommandLine.Contains($TestDir) } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    # Restrict recursive cleanup to the uniquely named temporary test directory.
+    $ResolvedTestDir = [IO.Path]::GetFullPath($TestDir)
+    $ExpectedParent = $TempRoot.TrimEnd([IO.Path]::DirectorySeparatorChar)
+    if ([IO.Path]::GetDirectoryName($ResolvedTestDir) -ne $ExpectedParent -or
+        [IO.Path]::GetFileName($ResolvedTestDir) -notmatch '^Pulso-runtime-test-[0-9a-f]{32}$') {
+        throw "Unsafe package test cleanup path: $ResolvedTestDir"
+    }
+    if (Test-Path -LiteralPath $ResolvedTestDir) { Remove-Item -LiteralPath $ResolvedTestDir -Recurse -Force }
 }

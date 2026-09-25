@@ -160,7 +160,7 @@ To verify an installed package from a development checkout:
 .\scripts\test-windows-package.ps1 -PackageDir 'C:\path\to\installed\Pulso'
 ```
 
-This audits packaged DLLs, verifies the bundled browser's signature/version, and briefly launches Pulso from another working directory with only Windows system directories on `PATH`. It checks that Pulso starts a browser and renderer from its own runtime folder. It does not connect to a PLC. Pull requests and releases run the check after installing the Linux cross-built package on Windows, both with and without a shared WebView2 runtime; a release cannot publish if either check fails. The missing-runtime test removes shared WebView2 only on disposable GitHub-hosted runners.
+This audits packaged DLLs, verifies the bundled browser's signature/version, and briefly launches Pulso from another working directory with only Windows system directories on `PATH`. It checks that Pulso starts a browser and renderer from its own runtime folder. It then launches a temporary copy without the browser folder and requires the missing-bundled-browser error, proving that a shared runtime cannot hide an incomplete package. The test leaves the installed package and shared WebView2 untouched and does not connect to a PLC. Pull requests and releases run both checks after installing the Linux cross-built package on Windows; a release cannot publish if verification fails.
 
 macOS app bundle:
 

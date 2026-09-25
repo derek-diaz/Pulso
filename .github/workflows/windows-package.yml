@@ -47,10 +47,6 @@ jobs:
     needs: build
     runs-on: windows-latest
     timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        runtime: [existing, missing]
     steps:
       - uses: actions/checkout@v4
 
@@ -63,26 +59,7 @@ jobs:
           name: pulso-windows-amd64-installer
           path: installer
 
-      - name: Remove preinstalled WebView2 on disposable runner
-        if: matrix.runtime == 'missing'
-        shell: pwsh
-        run: |
-          # Never run this destructive test preparation on a developer PC or a
-          # persistent self-hosted runner. The other matrix job retains WebView2.
-          if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
-            throw "Runtime removal is restricted to disposable GitHub-hosted runners"
-          }
-          $runtimeRoot = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\EdgeWebView\Application'
-          $setups = @(Get-ChildItem "$runtimeRoot\*\Installer\setup.exe" -ErrorAction SilentlyContinue)
-          foreach ($setup in $setups) {
-            $process = Start-Process -FilePath $setup.FullName -ArgumentList @('--uninstall', '--msedgewebview', '--system-level', '--force-uninstall') -WindowStyle Hidden -PassThru -Wait
-            if ($process.ExitCode -ne 0) { throw "WebView2 removal failed: $($process.ExitCode)" }
-          }
-          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
-          $version = (Get-ItemProperty -LiteralPath $key -Name pv -ErrorAction SilentlyContinue).pv
-          if ($version -and $version -ne '0.0.0.0') { throw "WebView2 remains installed; cannot test the missing-runtime path" }
-
-      - name: Install and verify without a developer PATH
+      - name: Install and verify bundled runtime isolation
         shell: pwsh
         run: |
           $installers = @(Get-ChildItem installer/*-installer.exe)

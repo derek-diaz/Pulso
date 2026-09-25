@@ -1,0 +1,13 @@
+{
+  "version": "154.0.4258.37",
+  "amd64": {
+    "folder": "Microsoft.WebView2.FixedVersionRuntime.154.0.4258.37.x64",
+    "url": "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/b82d47e8-d146-4563-94d1-3a3176b25c0a/Microsoft.WebView2.FixedVersionRuntime.154.0.4258.37.x64.cab",
+    "sha256": "143da7f7c4939fddd3875ed918e44022d7eb87063bf912fe3e32df37c6b0b8c3"
+  },
+  "arm64": {
+    "folder": "Microsoft.WebView2.FixedVersionRuntime.154.0.4258.37.arm64",
+    "url": "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/14402c3c-0447-4db8-92e4-f79b20be8387/Microsoft.WebView2.FixedVersionRuntime.154.0.4258.37.arm64.cab",
+    "sha256": "e9a70603a349478ec6c4822863b07014e5fd3ac549dd99719d5810af2e624efb"
+  }
+}

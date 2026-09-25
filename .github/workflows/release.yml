@@ -31,27 +31,8 @@ jobs:
           if-no-files-found: error
 
   windows-installer:
-    name: Windows NSIS installer
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Build PLC-enabled Windows installer
-        run: ./scripts/docker-build-plc.sh windows-amd64
-
-      - name: Rename Windows installer
-        shell: bash
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          mv build/bin/Pulso-amd64-installer.exe "build/bin/Pulso-${version}-windows-amd64-installer.exe"
-
-      - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: pulso-windows-amd64-installer
-          path: build/bin/Pulso-*-windows-amd64-installer.exe
-          if-no-files-found: error
+    name: Windows installer and startup verification
+    uses: ./.github/workflows/windows-package.yml
 
   macos-app:
     name: macOS app bundle

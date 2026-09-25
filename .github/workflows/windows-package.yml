@@ -1,0 +1,98 @@
+name: Windows package verification
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Windows installer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Test runtime dependency packaging
+        run: go test ./tools/windows-runtime
+
+      - name: Build PLC-enabled Windows installer
+        run: ./scripts/docker-build-plc.sh windows-amd64
+
+      - name: Name Windows installer
+        shell: bash
+        run: |
+          version="dev"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          mv build/bin/Pulso-amd64-installer.exe "build/bin/Pulso-${version}-windows-amd64-installer.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pulso-windows-amd64-installer
+          path: build/bin/Pulso-*-windows-amd64-installer.exe
+          if-no-files-found: error
+
+  smoke-test:
+    name: Install and launch on Windows
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [existing, missing]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: pulso-windows-amd64-installer
+          path: installer
+
+      - name: Remove preinstalled WebView2 on disposable runner
+        if: matrix.runtime == 'missing'
+        shell: pwsh
+        run: |
+          # Never run this destructive test preparation on a developer PC or a
+          # persistent self-hosted runner. The other matrix job retains WebView2.
+          if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+            throw "Runtime removal is restricted to disposable GitHub-hosted runners"
+          }
+          $runtimeRoot = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\EdgeWebView\Application'
+          $setups = @(Get-ChildItem "$runtimeRoot\*\Installer\setup.exe" -ErrorAction SilentlyContinue)
+          foreach ($setup in $setups) {
+            $process = Start-Process -FilePath $setup.FullName -ArgumentList @('--uninstall', '--msedgewebview', '--system-level', '--force-uninstall') -WindowStyle Hidden -PassThru -Wait
+            if ($process.ExitCode -ne 0) { throw "WebView2 removal failed: $($process.ExitCode)" }
+          }
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $version = (Get-ItemProperty -LiteralPath $key -Name pv -ErrorAction SilentlyContinue).pv
+          if ($version -and $version -ne '0.0.0.0') { throw "WebView2 remains installed; cannot test the missing-runtime path" }
+
+      - name: Install and verify without a developer PATH
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem installer/*-installer.exe)
+          if ($installers.Count -ne 1) { throw "Expected exactly one Windows installer" }
+          $installer = $installers[0]
+          $installDir = Join-Path $env:RUNNER_TEMP 'Pulso package test'
+          $runtimeKey = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $before = (Get-ItemProperty -LiteralPath $runtimeKey -Name pv -ErrorAction SilentlyContinue).pv
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$installDir") -WindowStyle Hidden -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw "Installer exited with code $($process.ExitCode)" }
+          $after = (Get-ItemProperty -LiteralPath $runtimeKey -Name pv -ErrorAction SilentlyContinue).pv
+          if ($before -ne $after) { throw "Pulso setup changed the shared WebView2 installation" }
+          ./scripts/test-windows-package.ps1 -PackageDir $installDir

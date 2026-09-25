@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"os"
 
 	"Pulso/backend"
 
@@ -19,12 +20,17 @@ var assets embed.FS
 var appIcon []byte
 
 func main() {
+	windows, err := windowsOptions()
+	if err != nil {
+		println("Error:", err.Error())
+		os.Exit(1)
+	}
 	app := backend.NewApp()
 
-	err := wails.Run(&options.App{
-		Title:  "Pulso",
-		Width:  1440,
-		Height: 900,
+	err = wails.Run(&options.App{
+		Title:     "Pulso",
+		Width:     1440,
+		Height:    900,
 		MinWidth:  1180,
 		MinHeight: 720,
 		AssetServer: &assetserver.Options{
@@ -32,6 +38,7 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 9, G: 14, B: 20, A: 1},
 		OnStartup:        app.Startup,
+		Windows:          windows,
 		Mac: &mac.Options{
 			About: &mac.AboutInfo{
 				Title: "Pulso",

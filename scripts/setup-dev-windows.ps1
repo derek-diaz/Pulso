@@ -141,7 +141,9 @@ if ($LASTEXITCODE -ne 0) {
     throw "Failed to install frontend dependencies"
 }
 
-if (!(Test-Path $PkgConfigFile) -or !(Test-Path $ExpectedDll)) {
+$InvalidPrefix = (Test-Path $PkgConfigFile) -and
+    (Select-String -LiteralPath $PkgConfigFile -SimpleMatch '$InstallPrefix' -Quiet)
+if (!(Test-Path $PkgConfigFile) -or !(Test-Path $ExpectedDll) -or $InvalidPrefix) {
     New-Item -ItemType Directory -Force -Path $DepsDir | Out-Null
 
     $Version = $LibPlcTagVersion.TrimStart("v")
@@ -184,7 +186,7 @@ if (!(Test-Path $PkgConfigFile) -or !(Test-Path $ExpectedDll)) {
 
     cmake -S $SourceDir -B $BuildDir -G Ninja `
         -DCMAKE_BUILD_TYPE=Release `
-        -DCMAKE_INSTALL_PREFIX=$InstallPrefix `
+        "-DCMAKE_INSTALL_PREFIX=$InstallPrefix" `
         -DBUILD_EXAMPLES=OFF `
         -DBUILD_TESTS=OFF `
         -DBUILD_SHARED_LIBS=ON

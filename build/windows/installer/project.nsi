@@ -33,6 +33,7 @@ Unicode true
 ## Include the wails tools
 ####
 !include "wails_tools.nsh"
+!include "webview2.nsh"
 
 # The version information for this two must consist of 4 parts
 VIProductVersion "${INFO_PRODUCTVERSION}.0"
@@ -82,7 +83,7 @@ FunctionEnd
 Section
     !insertmacro wails.setShellContext
 
-    !insertmacro wails.webview2runtime
+    Call pulso.copyWebView2
 
     SetOutPath $INSTDIR
 
@@ -90,23 +91,15 @@ Section
 
     !ifdef SUPPORTS_AMD64
         ${if} ${IsNativeAMD64}
-            !if /FileExists "resources\plctag\amd64\libplctag.dll"
-                File "/oname=libplctag.dll" "resources\plctag\amd64\libplctag.dll"
-            !endif
-            !if /FileExists "resources\plctag\amd64\plctag.dll"
-                File "/oname=plctag.dll" "resources\plctag\amd64\plctag.dll"
-            !endif
+            # Staged by the build script, including transitive compiler runtimes.
+            # Missing staging is a build error, never a silently incomplete installer.
+            File "resources\plctag\amd64\*.dll"
         ${EndIf}
     !endif
 
     !ifdef SUPPORTS_ARM64
         ${if} ${IsNativeARM64}
-            !if /FileExists "resources\plctag\arm64\libplctag.dll"
-                File "/oname=libplctag.dll" "resources\plctag\arm64\libplctag.dll"
-            !endif
-            !if /FileExists "resources\plctag\arm64\plctag.dll"
-                File "/oname=plctag.dll" "resources\plctag\arm64\plctag.dll"
-            !endif
+            File "resources\plctag\arm64\*.dll"
         ${EndIf}
     !endif
 

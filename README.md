@@ -26,6 +26,16 @@ If you just want to use Pulso, download the latest installer from the [GitHub Re
 
 Development setup is only needed if you want to build Pulso from source, modify the app, or work on the PLC emulator.
 
+### Windows requirements and startup troubleshooting
+
+- Use the Windows **amd64 installer** on an Intel/AMD 64-bit PC running Windows 10 or later. The published installer does not support Windows ARM64.
+- The installer includes a private **Microsoft Edge WebView2 Runtime** inside Pulso's own folder. Setup copies everything needed; there are no secondary installers, separate runtime downloads, or internet requirements during installation. Windows will ask for administrator permission to install Pulso.
+- The Windows build scripts bundle `libplctag` and the compiler runtime DLLs alongside Pulso. End users do **not** need Go, Node.js, MSYS2, GCC, or the development setup scripts.
+
+If Windows reports **`libgcc_s_seh-1.dll` was not found** (or a missing `libwinpthread-1.dll` / `libplctag.dll`), the installation is missing a bundled dependency. This is a packaging defect in older installers, not an additional prerequisite you missed. Use a release whose notes include the Windows runtime packaging fix, or build from the corrected source below. Reinstalling the same affected installer will not fix it. Do not download individual DLLs from third-party DLL sites.
+
+When running a loose executable from a source build, keep all DLLs and the complete `WebView2` folder from `build/bin` alongside the executable.
+
 ## ⚠️ Read Before Connecting to a PLC
 
 > [!WARNING]
@@ -133,8 +143,24 @@ Linux Debian package:
 Windows PLC installer from Windows:
 
 ```powershell
+.\scripts\build-windows-plc.ps1
+# Or use your own target-architecture library:
 .\scripts\build-windows-plc.ps1 -Arch amd64 -LibPlcTagRoot C:\path\to\libplctag
 ```
+
+Install [NSIS](https://wails.io/docs/guides/windows-installer/) and put `makensis` on `PATH` before building an installer. Use the target compiler that built your `libplctag` DLL (`CC` / `go env CC`); the packaging step locates its runtime dependencies and rejects missing or wrong-architecture DLLs. Both Windows build scripts stage the full dependency chain and audit the resulting executable before reporting success.
+
+Windows builds bundle the complete [Fixed Version WebView2 runtime](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution#the-fixed-version-runtime-distribution-mode), pinned in `build/windows/webview2-runtime.json`. The first build downloads the target-architecture CAB into `.deps/webview2-fixed`, verifies its SHA256, and extracts it for packaging. For an offline build, set `WEBVIEW2_ARCHIVE` to the matching CAB. Windows staging and package checks also verify Microsoft's browser signature. Docker builds include `cabextract` and `jq` for this step.
+
+Production Windows builds load `WebView2/<pinned-version>` relative to the executable, even if a shared runtime is present. Setup grants Microsoft's required sandbox read/execute permissions to that folder on Windows 10. Uninstalling Pulso removes its private runtime. This makes the download larger and means **browser security updates must ship in Pulso releases**: maintainers should update the version, official download URLs, and SHA256 values together in the manifest, then rebuild and run package verification. Development (`wails dev`) still uses the developer's shared runtime.
+
+To verify an installed package from a development checkout:
+
+```powershell
+.\scripts\test-windows-package.ps1 -PackageDir 'C:\path\to\installed\Pulso'
+```
+
+This audits packaged DLLs, verifies the bundled browser's signature/version, and briefly launches Pulso from another working directory with only Windows system directories on `PATH`. It checks that Pulso starts a browser and renderer from its own runtime folder. It does not connect to a PLC. Pull requests and releases run the check after installing the Linux cross-built package on Windows, both with and without a shared WebView2 runtime; a release cannot publish if either check fails. The missing-runtime test removes shared WebView2 only on disposable GitHub-hosted runners.
 
 macOS app bundle:
 

@@ -14,7 +14,7 @@ if [[ "${arch}" != "amd64" ]]; then
   exit 1
 fi
 
-for tool in cmake curl makensis npm pkg-config tar wails x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gcc x86_64-w64-mingw32-windres; do
+for tool in cabextract cmake curl go jq makensis npm pkg-config tar wails x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gcc x86_64-w64-mingw32-windres; do
   if ! command -v "${tool}" >/dev/null 2>&1; then
     echo "Missing required tool: ${tool}" >&2
     exit 1
@@ -23,7 +23,15 @@ done
 
 prefix="${LIBPLCTAG_WINDOWS_PREFIX:-${DEPS_DIR}/libplctag-windows-${arch}}"
 pkg_config_dir="${prefix}/lib/pkgconfig"
-expected_dll_path="${prefix}/bin/libplctag.dll"
+
+find_plctag_dll() {
+  for name in libplctag.dll plctag.dll; do
+    if [[ -f "${prefix}/bin/${name}" ]]; then
+      printf '%s\n' "${prefix}/bin/${name}"
+      return
+    fi
+  done
+}
 
 build_libplctag_windows() {
   mkdir -p "${DEPS_DIR}"
@@ -82,19 +90,24 @@ build_libplctag_windows() {
   cp "${built_dll}" "${prefix}/bin/$(basename "${built_dll}")"
 }
 
-if [[ ! -f "${pkg_config_dir}/libplctag.pc" || ! -f "${expected_dll_path}" ]]; then
+if [[ ! -f "${pkg_config_dir}/libplctag.pc" || -z "$(find_plctag_dll)" ]]; then
   build_libplctag_windows
 fi
 
-if [[ ! -f "${pkg_config_dir}/libplctag.pc" || ! -f "${expected_dll_path}" ]]; then
+dll_path="$(find_plctag_dll)"
+if [[ ! -f "${pkg_config_dir}/libplctag.pc" || -z "${dll_path}" ]]; then
   echo "Windows libplctag staging failed under ${prefix}" >&2
   exit 1
 fi
 
 cd "${ROOT_DIR}"
 installer_dll_dir="${ROOT_DIR}/build/windows/installer/resources/plctag/${arch}"
-mkdir -p "${installer_dll_dir}"
-cp "${expected_dll_path}" "${installer_dll_dir}/libplctag.dll"
+runtime_tool="${DEPS_DIR}/windows-runtime"
+# This tool must run on the host, not the Windows cross-compilation target.
+GOOS="$(go env GOHOSTOS)" GOARCH="$(go env GOHOSTARCH)" CGO_ENABLED=0 \
+  go build -o "${runtime_tool}" ./tools/windows-runtime
+"${runtime_tool}" -root "${dll_path}" -dest "${installer_dll_dir}" \
+  -arch "${arch}" -cc x86_64-w64-mingw32-gcc
 
 export CC=x86_64-w64-mingw32-gcc
 export CGO_ENABLED=1
@@ -105,23 +118,22 @@ export PKG_CONFIG_PATH="${pkg_config_dir}${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
 export PATH="${prefix}/bin:${PATH}"
 export GOCACHE="${GOCACHE:-${DEPS_DIR}/go-build-windows-${arch}}"
 
-set +e
+bash "${ROOT_DIR}/scripts/stage-webview2.sh" "${arch}"
 wails build \
   -platform windows/amd64 \
   -tags libplctag \
   -nsis \
-  -webview2 embed \
+  -webview2 error \
   -skipbindings \
   -o Pulso-windows-${arch}-plc.exe
-wails_status=$?
-set -e
 
 installer_path="${ROOT_DIR}/build/bin/Pulso-${arch}-installer.exe"
 binary_path="${ROOT_DIR}/build/bin/Pulso-windows-${arch}-plc.exe"
-if [[ "${wails_status}" -ne 0 ]]; then
-  if [[ -f "${installer_path}" && -f "${binary_path}" ]]; then
-    echo "Wails returned ${wails_status} after producing ${installer_path}; keeping generated installer."
-  else
-    exit "${wails_status}"
-  fi
-fi
+test -f "${installer_path}"
+"${runtime_tool}" -root "${binary_path}" -dest "${installer_dll_dir}" -arch "${arch}" -verify
+cp "${installer_dll_dir}"/*.dll "${ROOT_DIR}/build/bin/"
+manifest="${ROOT_DIR}/build/windows/webview2-runtime.json"
+version="$(jq -er '.version' "${manifest}")"
+folder="$(jq -er --arg arch "${arch}" '.[$arch].folder' "${manifest}")"
+mkdir -p "${ROOT_DIR}/build/bin/WebView2/${version}"
+cp -a "${ROOT_DIR}/build/windows/installer/resources/webview2-fixed/${arch}/${folder}/." "${ROOT_DIR}/build/bin/WebView2/${version}/"

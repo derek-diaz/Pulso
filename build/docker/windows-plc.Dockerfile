@@ -10,11 +10,13 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
+        cabextract \
         cmake \
         curl \
         gcc-mingw-w64-x86-64 \
         g++-mingw-w64-x86-64 \
         git \
+        jq \
         npm \
         nsis \
         pkg-config \
